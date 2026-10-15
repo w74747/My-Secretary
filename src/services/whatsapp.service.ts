@@ -1,6 +1,6 @@
 import makeWASocket, {
   DisconnectReason,
-  fetchLatestBaileysVersion,
+  Browsers,
   WASocket,
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
@@ -15,7 +15,7 @@ export class WhatsAppService {
   public sock: WASocket | null = null;
   public qrCodeDataUrl: string | null = null;
   public isConnected: boolean = false;
-  private isInitializing: boolean = false;
+  private isConnecting: boolean = false;
 
   private constructor() {}
 
@@ -27,55 +27,63 @@ export class WhatsAppService {
   }
 
   public async init() {
-    if (this.isInitializing) return;
-    this.isInitializing = true;
+    if (this.isConnecting) return;
+    this.isConnecting = true;
 
     try {
       const { state, saveCreds } = await usePrismaAuthState('primary_session');
-      const { version } = await fetchLatestBaileysVersion();
 
       this.sock = makeWASocket({
-        version,
         auth: state,
         logger: pino({ level: 'silent' }),
         printQRInTerminal: false,
-        browser: ['Ubuntu', 'Chrome', '20.0.04'],
-        connectTimeoutMs: 60000,
-        defaultQueryTimeoutMs: 60000,
+        browser: Browsers.ubuntu('Chrome'),
+        syncFullHistory: false,
+        generateHighQualityLinkPreview: true,
       });
 
-      this.sock.ev.on('creds.update', saveCreds);
+      this.sock.ev.on('creds.update', async () => {
+        await saveCreds();
+      });
 
       this.sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
-          console.log('\n--- امسح كود QR التالي عبر تطبيق واتساب ---');
+          console.log('\n======================================');
+          console.log('📌 امسح كود QR التالي عبر تطبيق واتساب:');
+          console.log('======================================');
           qrcodeTerminal.generate(qr, { small: true });
 
           try {
             this.qrCodeDataUrl = await QRCode.toDataURL(qr);
           } catch (err) {
-            console.error('خطأ أثناء تحويل QR إلى صورة:', err);
+            console.error('خطأ في تحويل الـ QR إلى صورة:', err);
           }
+        }
+
+        if (connection === 'open') {
+          this.isConnected = true;
+          this.isConnecting = false;
+          this.qrCodeDataUrl = null;
+          console.log('✅ تم اتصال واتساب بالسيرفر بنجاح!');
         }
 
         if (connection === 'close') {
           this.isConnected = false;
-          this.isInitializing = false;
+          this.isConnecting = false;
           const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
           const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
-          console.log(`انقطع الاتصال (السبب: ${statusCode || 'إعادة تشغيل عادية'}). إعادة المحاولة: ${shouldReconnect}`);
+          console.log(`حالة الاتصال: مغلق (الرمز: ${statusCode}). إعادة المحاولة: ${shouldReconnect}`);
 
           if (shouldReconnect) {
-            setTimeout(() => this.init(), 6000);
+            // انتظار ثوانٍ معدودة قبل إعادة المحاولة لمنع حلقة التكرار السريع
+            setTimeout(() => this.init(), 5000);
+          } else {
+            console.log('⚠️ تم تسجيل الخروج. يرجى مسح QR جديد.');
+            this.qrCodeDataUrl = null;
           }
-        } else if (connection === 'open') {
-          this.isConnected = true;
-          this.isInitializing = false;
-          this.qrCodeDataUrl = null;
-          console.log('✅ تم اتصال واتساب بالسيرفر بنجاح!');
         }
       });
 
@@ -99,13 +107,13 @@ export class WhatsAppService {
             await this.sock.sendMessage(sender, { text: replyText });
           }
         } catch (error) {
-          console.error('خطأ أثناء معالجة رسالة الذكاء الاصطناعي:', error);
+          console.error('خطأ في معالجة الذكاء الاصطناعي:', error);
         }
       });
     } catch (err) {
-      this.isInitializing = false;
-      console.error('خطأ في تهيئة واتساب، إعادة المحاولة بعد 10 ثوانٍ:', err);
-      setTimeout(() => this.init(), 10000);
+      this.isConnecting = false;
+      console.error('خطأ أثناء تشغيل واتساب:', err);
+      setTimeout(() => this.init(), 5000);
     }
   }
 
