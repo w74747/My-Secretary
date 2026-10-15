@@ -9,6 +9,8 @@ import { Boom } from '@hapi/boom';
 import qrcodeTerminal from 'qrcode-terminal';
 import QRCode from 'qrcode';
 import pino from 'pino';
+import path from 'path';
+import fs from 'fs';
 import { processUserMessage } from './ai.service';
 
 export class WhatsAppService {
@@ -34,14 +36,21 @@ export class WhatsAppService {
     const logger = pino({ level: 'warn' });
 
     try {
-      console.log('⏳ جاري جلب مفاتيح الجلسة وإصدار واتساب...');
-      const { state, saveCreds } = await useMultiFileAuthState('./whatsapp_session');
+      // التأكد من وجود مجلد الجلسة بمسار نظام مؤكد
+      const sessionDir = path.join(process.cwd(), 'whatsapp_session');
+      if (!fs.existsSync(sessionDir)) {
+        fs.mkdirSync(sessionDir, { recursive: true });
+      }
+
+      console.log('⏳ جاري تحميل مفاتيح الجلسة وإصدار واتساب...');
+      const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
+      
       const { version, isLatest } = await fetchLatestBaileysVersion().catch(() => ({
         version: [2, 3000, 1015901307] as [number, number, number],
         isLatest: true,
       }));
 
-      console.log(`📡 إصدار بروتوكول واتساب المعتمد: v${version.join('.')} (الأحدث: ${isLatest})`);
+      console.log(`📡 إصدار واتساب: v${version.join('.')} (الأحدث: ${isLatest})`);
 
       this.sock = makeWASocket({
         version,
@@ -52,9 +61,9 @@ export class WhatsAppService {
           keys: makeCacheableSignalKeyStore(state.keys, logger),
         },
         browser: ['Ubuntu', 'Chrome', '122.0.0.0'],
-        generateHighQualityLinkPreview: false,
+        syncFullHistory: false,
         connectTimeoutMs: 60000,
-        keepAliveIntervalMs: 25000,
+        defaultQueryTimeoutMs: 60000,
       });
 
       this.sock.ev.on('creds.update', saveCreds);
@@ -64,14 +73,14 @@ export class WhatsAppService {
 
         if (qr) {
           console.log('\n======================================================');
-          console.log('📌 كود الـ QR جاهز للمسح الآن:');
+          console.log('📌 تم استلام كود QR بنجاح:');
           console.log('======================================================');
           qrcodeTerminal.generate(qr, { small: true });
 
           try {
             this.qrCodeDataUrl = await QRCode.toDataURL(qr);
           } catch (err) {
-            console.error('خطأ في تحويل الـ QR إلى صورة Base64:', err);
+            console.error('خطأ في تحويل الـ QR إلى صورة:', err);
           }
         }
 
@@ -79,7 +88,7 @@ export class WhatsAppService {
           this.isConnected = true;
           this.isConnecting = false;
           this.qrCodeDataUrl = null;
-          console.log('🎉 ✅ تم الاتصال بواتساب بنجاح والخدمة تعمل الآن!');
+          console.log('🎉 ✅ تم الاتصال بواتساب بنجاح!');
         }
 
         if (connection === 'close') {
@@ -90,15 +99,15 @@ export class WhatsAppService {
           const statusCode = (error as Boom)?.output?.statusCode;
           const errorMessage = error?.message || String(error);
 
-          console.log(`⚠️ تم إغلاق الاتصال. الرمز: ${statusCode || 'غير محدد'}, التفاصيل: ${errorMessage}`);
+          console.log(`⚠️ تم قطع الاتصال. الكود: ${statusCode || 'غير محدد'}, السبب: ${errorMessage}`);
 
           const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
           if (shouldReconnect) {
-            console.log('🔄 محاولة إعادة الاتصال خلال 5 ثوانٍ...');
+            console.log('🔄 إعادة المحاولة خلال 5 ثوانٍ...');
             setTimeout(() => this.init(), 5000);
           } else {
-            console.log('🛑 تم تسجيل الخروج من الجلسة. يتطلب مسح QR جديد.');
+            console.log('🛑 انتهت صلاحية الجلسة، يتطلب مسح QR جديد.');
             this.qrCodeDataUrl = null;
           }
         }
@@ -124,12 +133,12 @@ export class WhatsAppService {
             await this.sock.sendMessage(sender, { text: replyText });
           }
         } catch (error) {
-          console.error('❌ خطأ أثناء معالجة رسالة الذكاء الاصطناعي:', error);
+          console.error('❌ خطأ أثناء معالجة الذكاء الاصطناعي:', error);
         }
       });
     } catch (err) {
       this.isConnecting = false;
-      console.error('❌ خطأ فادح أثناء تهيئة واتساب:', err);
+      console.error('❌ خطأ في تهيئة السيركت:', err);
       setTimeout(() => this.init(), 6000);
     }
   }
