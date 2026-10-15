@@ -1,11 +1,3 @@
-import crypto from 'crypto';
-
-// حل مشكلة Node 18: حقن WebCrypto في النطاق العام قبل استيراد أي مكتبة أخرى
-if (!globalThis.crypto) {
-  (globalThis as any).crypto = crypto.webcrypto || crypto;
-}
-(global as any).crypto = (globalThis as any).crypto || crypto;
-
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -56,7 +48,7 @@ app.get('/', (req: Request, res: Response) => {
       <html dir="rtl" lang="ar">
       <head>
         <meta charset="utf-8">
-        <meta http-equiv="refresh" content="12">
+        <meta http-equiv="refresh" content="15">
         <title>ربط الواتساب</title>
         <style>
           body { font-family: system-ui, sans-serif; background: #F8FAFC; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
@@ -99,7 +91,6 @@ app.get('/', (req: Request, res: Response) => {
   `);
 });
 
-// فحص صحة الخادم
 app.get('/health', (req: Request, res: Response) => {
   res.json({
     status: 'ok',
@@ -108,7 +99,6 @@ app.get('/health', (req: Request, res: Response) => {
   });
 });
 
-// بدء تشغيل الخادم والاتصال بواتساب
 app.listen(PORT, async () => {
   console.log(`🚀 السيرفر يعمل الآن بنجاح على المنفذ: ${PORT}`);
   try {
