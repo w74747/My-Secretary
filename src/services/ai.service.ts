@@ -1,11 +1,16 @@
 import OpenAI from 'openai';
 import { prisma } from '../lib/prisma';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+// الربط مع Together.ai باستخدام معيار OpenAI
+const ai = new OpenAI({
+  apiKey: process.env.TOGETHER_API_KEY,
+  baseURL: 'https://api.together.xyz/v1',
 });
 
-// تعريف الأدوات التي يمكن للذكاء الاصطناعي استدعاؤها
+// النموذج الموصى به من Together.ai لدعم استدعاء الدوال باللغة العربية
+const MODEL_NAME = 'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo';
+
+// تعريف الأدوات التي يستدعيها النموذج لتعديل قاعدة البيانات
 const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: 'function',
@@ -67,7 +72,7 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
 export async function processUserMessage(senderPhone: string, userMessage: string): Promise<string> {
   const cleanPhone = senderPhone.replace('@s.whatsapp.net', '');
 
-  // جلب جهة الاتصال والمهام المرتبطة لفهم السياق
+  // جلب جهة الاتصال والمهام المسجلة مسبقاً لإعطاء النموذج السياق الكامل
   const contact = await prisma.contact.findUnique({
     where: { phoneNumber: cleanPhone },
   });
@@ -94,8 +99,8 @@ export async function processUserMessage(senderPhone: string, userMessage: strin
     { role: 'user', content: userMessage },
   ];
 
-  const response = await openai.chat.completions.create({
-    model: 'gpt-4o',
+  const response = await ai.chat.completions.create({
+    model: MODEL_NAME,
     messages,
     tools,
     tool_choice: 'auto',
@@ -156,9 +161,8 @@ export async function processUserMessage(senderPhone: string, userMessage: strin
       }
     }
 
-    // إرسال رد نهائي بعد تنفيذ العمليات
-    const followUpResponse = await openai.chat.completions.create({
-      model: 'gpt-4o',
+    const followUpResponse = await ai.chat.completions.create({
+      model: MODEL_NAME,
       messages: [
         ...messages,
         responseMessage,
