@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 
-// تعريف كائن التشفير العام لـ Node 18 ليعمل تشفير Baileys بدون أي خطأ
+// حل مشكلة Node 18: حقن WebCrypto في النطاق العام قبل استيراد أي مكتبة أخرى
 if (!globalThis.crypto) {
   (globalThis as any).crypto = crypto.webcrypto || crypto;
 }
@@ -20,10 +20,10 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// مسارات الـ API
+// مسارات الـ API للوحة التحكم والمهام
 app.use('/api', apiRoutes);
 
-// صفحة المتصفح لعرض رمز QR وحالة الاتصال
+// الصفحة الرئيسية لعرض رمز QR وحالة الاتصال في المتصفح
 app.get('/', (req: Request, res: Response) => {
   if (whatsappService.isConnected) {
     return res.send(`
@@ -99,6 +99,7 @@ app.get('/', (req: Request, res: Response) => {
   `);
 });
 
+// فحص صحة الخادم
 app.get('/health', (req: Request, res: Response) => {
   res.json({
     status: 'ok',
@@ -107,6 +108,7 @@ app.get('/health', (req: Request, res: Response) => {
   });
 });
 
+// بدء تشغيل الخادم والاتصال بواتساب
 app.listen(PORT, async () => {
   console.log(`🚀 السيرفر يعمل الآن بنجاح على المنفذ: ${PORT}`);
   try {
