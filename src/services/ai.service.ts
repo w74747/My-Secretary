@@ -7,10 +7,8 @@ const ai = new OpenAI({
   baseURL: 'https://api.together.xyz/v1',
 });
 
-// النموذج الموصى به من Together.ai لدعم استدعاء الدوال باللغة العربية
 const MODEL_NAME = 'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo';
 
-// تعريف الأدوات التي يستدعيها النموذج لتعديل قاعدة البيانات
 const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: 'function',
@@ -72,7 +70,6 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
 export async function processUserMessage(senderPhone: string, userMessage: string): Promise<string> {
   const cleanPhone = senderPhone.replace('@s.whatsapp.net', '');
 
-  // جلب جهة الاتصال والمهام المسجلة مسبقاً لإعطاء النموذج السياق الكامل
   const contact = await prisma.contact.findUnique({
     where: { phoneNumber: cleanPhone },
   });
@@ -132,7 +129,9 @@ export async function processUserMessage(senderPhone: string, userMessage: strin
       }
 
       if (toolCall.function.name === 'update_task_progress') {
-        let taskToUpdate = null;
+        // إصلاح نوع المتغير لمنع خطأ TS2322 و TS2339
+        let taskToUpdate: any = null;
+
         if (args.taskId) {
           taskToUpdate = await prisma.task.findUnique({ where: { id: args.taskId } });
         } else if (args.taskTitle) {
