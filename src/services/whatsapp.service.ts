@@ -1,7 +1,8 @@
 import makeWASocket, {
   DisconnectReason,
   useMultiFileAuthState,
-  Browsers,
+  fetchLatestBaileysVersion,
+  makeCacheableSignalKeyStore,
   WASocket,
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
@@ -15,7 +16,7 @@ export class WhatsAppService {
   public sock: WASocket | null = null;
   public qrCodeDataUrl: string | null = null;
   public isConnected: boolean = false;
-  private isStarting: boolean = false;
+  private isConnecting: boolean = false;
 
   private constructor() {}
 
@@ -27,18 +28,33 @@ export class WhatsAppService {
   }
 
   public async init() {
-    if (this.isStarting) return;
-    this.isStarting = true;
+    if (this.isConnecting) return;
+    this.isConnecting = true;
+
+    const logger = pino({ level: 'warn' });
 
     try {
-      // استخدام آلية Baileys الرسمية والمستقرة لحفظ بيانات الجلسة والمفاتيح
+      console.log('⏳ جاري جلب مفاتيح الجلسة وإصدار واتساب...');
       const { state, saveCreds } = await useMultiFileAuthState('./whatsapp_session');
+      const { version, isLatest } = await fetchLatestBaileysVersion().catch(() => ({
+        version: [2, 3000, 1015901307] as [number, number, number],
+        isLatest: true,
+      }));
+
+      console.log(`📡 إصدار بروتوكول واتساب المعتمد: v${version.join('.')} (الأحدث: ${isLatest})`);
 
       this.sock = makeWASocket({
-        auth: state,
-        logger: pino({ level: 'silent' }),
+        version,
+        logger,
         printQRInTerminal: false,
-        browser: Browsers.ubuntu('Chrome'),
+        auth: {
+          creds: state.creds,
+          keys: makeCacheableSignalKeyStore(state.keys, logger),
+        },
+        browser: ['Ubuntu', 'Chrome', '122.0.0.0'],
+        generateHighQualityLinkPreview: false,
+        connectTimeoutMs: 60000,
+        keepAliveIntervalMs: 25000,
       });
 
       this.sock.ev.on('creds.update', saveCreds);
@@ -47,37 +63,42 @@ export class WhatsAppService {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
-          console.log('\n==================================================');
-          console.log('📌 تم توليد رمز QR بنجاح! امسحه من المتصفح أو هنا:');
-          console.log('==================================================');
+          console.log('\n======================================================');
+          console.log('📌 كود الـ QR جاهز للمسح الآن:');
+          console.log('======================================================');
           qrcodeTerminal.generate(qr, { small: true });
 
           try {
             this.qrCodeDataUrl = await QRCode.toDataURL(qr);
           } catch (err) {
-            console.error('خطأ في تحويل الـ QR إلى صورة:', err);
+            console.error('خطأ في تحويل الـ QR إلى صورة Base64:', err);
           }
         }
 
         if (connection === 'open') {
           this.isConnected = true;
-          this.isStarting = false;
+          this.isConnecting = false;
           this.qrCodeDataUrl = null;
-          console.log('✅ تم اتصال واتساب بالسيرفر بنجاح!');
+          console.log('🎉 ✅ تم الاتصال بواتساب بنجاح والخدمة تعمل الآن!');
         }
 
         if (connection === 'close') {
           this.isConnected = false;
-          this.isStarting = false;
-          const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
+          this.isConnecting = false;
+
+          const error = lastDisconnect?.error;
+          const statusCode = (error as Boom)?.output?.statusCode;
+          const errorMessage = error?.message || String(error);
+
+          console.log(`⚠️ تم إغلاق الاتصال. الرمز: ${statusCode || 'غير محدد'}, التفاصيل: ${errorMessage}`);
+
           const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
-          console.log(`حالة الاتصال: مغلق (رمز السبب: ${statusCode}). إعادة المحاولة: ${shouldReconnect}`);
-
           if (shouldReconnect) {
-            setTimeout(() => this.init(), 3000);
+            console.log('🔄 محاولة إعادة الاتصال خلال 5 ثوانٍ...');
+            setTimeout(() => this.init(), 5000);
           } else {
-            console.log('⚠️ تم تسجيل الخروج. يرجى مسح QR جديد.');
+            console.log('🛑 تم تسجيل الخروج من الجلسة. يتطلب مسح QR جديد.');
             this.qrCodeDataUrl = null;
           }
         }
@@ -103,13 +124,13 @@ export class WhatsAppService {
             await this.sock.sendMessage(sender, { text: replyText });
           }
         } catch (error) {
-          console.error('خطأ في معالجة الذكاء الاصطناعي:', error);
+          console.error('❌ خطأ أثناء معالجة رسالة الذكاء الاصطناعي:', error);
         }
       });
     } catch (err) {
-      this.isStarting = false;
-      console.error('خطأ أثناء تشغيل واتساب:', err);
-      setTimeout(() => this.init(), 4000);
+      this.isConnecting = false;
+      console.error('❌ خطأ فادح أثناء تهيئة واتساب:', err);
+      setTimeout(() => this.init(), 6000);
     }
   }
 
