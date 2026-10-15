@@ -1,3 +1,11 @@
+import crypto from 'crypto';
+
+// تعريف كائن التشفير العام لـ Node 18 ليعمل تشفير Baileys بدون أي خطأ
+if (!globalThis.crypto) {
+  (globalThis as any).crypto = crypto.webcrypto || crypto;
+}
+(global as any).crypto = (globalThis as any).crypto || crypto;
+
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -15,7 +23,7 @@ app.use(express.json());
 // مسارات الـ API
 app.use('/api', apiRoutes);
 
-// صفحة الواجهة المباشرة لفحص ومسح كود الـ QR من المتصفح
+// صفحة المتصفح لعرض رمز QR وحالة الاتصال
 app.get('/', (req: Request, res: Response) => {
   if (whatsappService.isConnected) {
     return res.send(`
@@ -23,7 +31,7 @@ app.get('/', (req: Request, res: Response) => {
       <html dir="rtl" lang="ar">
       <head>
         <meta charset="utf-8">
-        <title>حالة السيرفر</title>
+        <title>حالة السكرتير الذكي</title>
         <style>
           body { font-family: system-ui, sans-serif; background: #F8FAFC; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
           .card { background: white; padding: 40px; border-radius: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); text-align: center; max-width: 400px; }
@@ -35,7 +43,7 @@ app.get('/', (req: Request, res: Response) => {
       <body>
         <div class="card">
           <h2><span class="status"></span>الواتساب متصل بنجاح</h2>
-          <p>المساعد الذكي يعمل وجاهز لتلقي المهام والمتابعة.</p>
+          <p>المساعد الذكي يعمل الآن وجاهز لمتابعة المهام وتحديث اللوحة.</p>
         </div>
       </body>
       </html>
@@ -48,7 +56,7 @@ app.get('/', (req: Request, res: Response) => {
       <html dir="rtl" lang="ar">
       <head>
         <meta charset="utf-8">
-        <meta http-equiv="refresh" content="8">
+        <meta http-equiv="refresh" content="12">
         <title>ربط الواتساب</title>
         <style>
           body { font-family: system-ui, sans-serif; background: #F8FAFC; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
@@ -62,7 +70,7 @@ app.get('/', (req: Request, res: Response) => {
         <div class="card">
           <h2>امسح الرمز لربط المساعد الذكي</h2>
           <p>افتح واتساب في هاتفك > الأجهزة المرتبطة > ربط جهاز، ثم وجّه الكاميرا نحو الرمز التالي:</p>
-          <img src="${whatsappService.qrCodeDataUrl}" alt="WhatsApp QR Code" width="260" height="260" />
+          <img src="${whatsappService.qrCodeDataUrl}" alt="WhatsApp QR Code" width="270" height="270" />
         </div>
       </body>
       </html>
