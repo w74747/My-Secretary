@@ -1,5 +1,6 @@
 import makeWASocket, {
   DisconnectReason,
+  useMultiFileAuthState,
   Browsers,
   WASocket,
 } from '@whiskeysockets/baileys';
@@ -7,7 +8,6 @@ import { Boom } from '@hapi/boom';
 import qrcodeTerminal from 'qrcode-terminal';
 import QRCode from 'qrcode';
 import pino from 'pino';
-import { usePrismaAuthState } from '../lib/baileys-prisma-auth';
 import { processUserMessage } from './ai.service';
 
 export class WhatsAppService {
@@ -15,7 +15,7 @@ export class WhatsAppService {
   public sock: WASocket | null = null;
   public qrCodeDataUrl: string | null = null;
   public isConnected: boolean = false;
-  private isConnecting: boolean = false;
+  private isStarting: boolean = false;
 
   private constructor() {}
 
@@ -27,32 +27,29 @@ export class WhatsAppService {
   }
 
   public async init() {
-    if (this.isConnecting) return;
-    this.isConnecting = true;
+    if (this.isStarting) return;
+    this.isStarting = true;
 
     try {
-      const { state, saveCreds } = await usePrismaAuthState('primary_session');
+      // استخدام آلية Baileys الرسمية والمستقرة لحفظ بيانات الجلسة والمفاتيح
+      const { state, saveCreds } = await useMultiFileAuthState('./whatsapp_session');
 
       this.sock = makeWASocket({
         auth: state,
         logger: pino({ level: 'silent' }),
         printQRInTerminal: false,
         browser: Browsers.ubuntu('Chrome'),
-        syncFullHistory: false,
-        generateHighQualityLinkPreview: true,
       });
 
-      this.sock.ev.on('creds.update', async () => {
-        await saveCreds();
-      });
+      this.sock.ev.on('creds.update', saveCreds);
 
       this.sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
-          console.log('\n======================================');
-          console.log('📌 امسح كود QR التالي عبر تطبيق واتساب:');
-          console.log('======================================');
+          console.log('\n==================================================');
+          console.log('📌 تم توليد رمز QR بنجاح! امسحه من المتصفح أو هنا:');
+          console.log('==================================================');
           qrcodeTerminal.generate(qr, { small: true });
 
           try {
@@ -64,22 +61,21 @@ export class WhatsAppService {
 
         if (connection === 'open') {
           this.isConnected = true;
-          this.isConnecting = false;
+          this.isStarting = false;
           this.qrCodeDataUrl = null;
           console.log('✅ تم اتصال واتساب بالسيرفر بنجاح!');
         }
 
         if (connection === 'close') {
           this.isConnected = false;
-          this.isConnecting = false;
+          this.isStarting = false;
           const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
           const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
-          console.log(`حالة الاتصال: مغلق (الرمز: ${statusCode}). إعادة المحاولة: ${shouldReconnect}`);
+          console.log(`حالة الاتصال: مغلق (رمز السبب: ${statusCode}). إعادة المحاولة: ${shouldReconnect}`);
 
           if (shouldReconnect) {
-            // انتظار ثوانٍ معدودة قبل إعادة المحاولة لمنع حلقة التكرار السريع
-            setTimeout(() => this.init(), 5000);
+            setTimeout(() => this.init(), 3000);
           } else {
             console.log('⚠️ تم تسجيل الخروج. يرجى مسح QR جديد.');
             this.qrCodeDataUrl = null;
@@ -111,9 +107,9 @@ export class WhatsAppService {
         }
       });
     } catch (err) {
-      this.isConnecting = false;
+      this.isStarting = false;
       console.error('خطأ أثناء تشغيل واتساب:', err);
-      setTimeout(() => this.init(), 5000);
+      setTimeout(() => this.init(), 4000);
     }
   }
 
