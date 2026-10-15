@@ -3,12 +3,12 @@ import {
   AuthenticationState,
   BufferJSON,
   initAuthCreds,
-  proto,
+  SignalDataTypeMap,
 } from '@whiskeysockets/baileys';
 import { prisma } from './prisma';
 
 export async function usePrismaAuthState(
-  sessionId: string = 'default-session'
+  sessionId: string = 'primary_session'
 ): Promise<{ state: AuthenticationState; saveCreds: () => Promise<void> }> {
   const existingSession = await prisma.whatsAppSession.findUnique({
     where: { id: sessionId },
@@ -31,12 +31,16 @@ export async function usePrismaAuthState(
   }
 
   const saveCreds = async () => {
-    const payload = JSON.stringify({ creds, keys }, BufferJSON.replacer);
-    await prisma.whatsAppSession.upsert({
-      where: { id: sessionId },
-      update: { data: payload },
-      create: { id: sessionId, data: payload },
-    });
+    try {
+      const payload = JSON.stringify({ creds, keys }, BufferJSON.replacer);
+      await prisma.whatsAppSession.upsert({
+        where: { id: sessionId },
+        update: { data: payload },
+        create: { id: sessionId, data: payload },
+      });
+    } catch (err) {
+      console.error('خطأ أثناء حفظ الجلسة في قاعدة البيانات:', err);
+    }
   };
 
   return {
@@ -56,9 +60,9 @@ export async function usePrismaAuthState(
         },
         set: (data) => {
           for (const category in data) {
-            for (const id in data[category]) {
+            for (const id in data[category as keyof SignalDataTypeMap]) {
               const key = `${category}-${id}`;
-              const val = data[category][id];
+              const val = (data as any)[category][id];
               if (val) {
                 keys[key] = val;
               } else {
@@ -66,6 +70,7 @@ export async function usePrismaAuthState(
               }
             }
           }
+          saveCreds();
         },
       },
     },
