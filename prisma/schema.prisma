@@ -7,12 +7,11 @@ generator client {
   provider = "prisma-client-js"
 }
 
-enum ProjectStatus {
-  NEW
-  IN_PROGRESS
-  IN_REVIEW
-  COMPLETED
-  PAUSED
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
 }
 
 enum TaskStatus {
@@ -22,83 +21,47 @@ enum TaskStatus {
   DONE
 }
 
-enum Priority {
-  LOW
-  MEDIUM
-  HIGH
-  URGENT
-}
-
-model Project {
-  id          String        @id @default(uuid())
-  title       String
-  description String?
-  color       String?       @default("#8B5CF6")
-  orderIndex  Float         @default(0.0)
-  status      ProjectStatus @default(IN_PROGRESS)
-  progress    Int           @default(0)
-  deadline    DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-
-  tasks       Task[]
-  activities  ActivityLog[]
+model Contact {
+  id          String   @id @default(cuid())
+  phoneNumber String   @unique
+  name        String?
+  role        String   @default("COLLABORATOR")
+  tasks       Task[]   @relation("AssignedTasks")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Task {
-  id          String      @id @default(uuid())
-  projectId   String?
-  project     Project?    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id           String      @id @default(cuid())
+  title        String
+  description  String?
+  priority     Priority    @default(MEDIUM)
+  status       TaskStatus  @default(TODO)
+  progress     Int         @default(0)
+  dueDate      DateTime?
+  orderIndex   Int         @default(0)
   
-  title       String
-  description String?
-  status      TaskStatus  @default(TODO)
-  priority    Priority    @default(MEDIUM)
-  progress    Int         @default(0)
-  orderIndex  Float       @default(0.0)
-  
-  dueDate     DateTime?
-  timerEnd    DateTime?
-  
-  assigneeId  String?
-  assignee    Contact?    @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+  // خيارات التذكير المتقدمة
+  reminderType     String  @default("NONE")     // NONE, EXACT, BEFORE, EVERY_X_HOURS
+  reminderOffset   Int     @default(0)          // عدد الدقائق أو عدد الساعات
+  repeatDaily      Boolean @default(false)      // هل يتكرر يومياً؟
+  lastReminderSent DateTime?                    // تاريخ آخر تذكير أُرسل لتفادي التكرار
 
-  subtasks    Subtask[]
-  activities  ActivityLog[]
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-}
-
-model Subtask {
-  id          String   @id @default(uuid())
-  taskId      String
-  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  title       String
-  isCompleted Boolean  @default(false)
-  orderIndex  Int      @default(0)
-  createdAt   DateTime @default(now())
-}
-
-model Contact {
-  id          String   @id @default(uuid())
-  name        String
-  phoneNumber String   @unique
-  role        String?
-  tasks       Task[]
-  createdAt   DateTime @default(now())
+  assigneeId   String?
+  assignee     Contact?    @relation("AssignedTasks", fields: [assigneeId], references: [id])
+  activities   ActivityLog[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 }
 
 model ActivityLog {
-  id          String   @id @default(uuid())
-  taskId      String?
-  task        Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  projectId   String?
-  project     Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  
-  action      String
-  source      String
-  rawMessage  String?
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  action     String
+  source     String   @default("SYSTEM")
+  rawMessage String?
+  taskId     String?
+  task       Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
 }
 
 model WhatsAppSession {
