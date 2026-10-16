@@ -16,7 +16,14 @@ class WhatsAppService {
   private authDir: string;
 
   constructor() {
-    this.authDir = process.env.WHATSAPP_AUTH_DIR || path.join(process.cwd(), 'whatsapp_auth');
+    // التحقق من وجود مسار القرص الثابت (Volume) في Railway
+    if (process.env.RAILWAY_VOLUME_MOUNT_PATH) {
+      this.authDir = path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'whatsapp_auth');
+    } else {
+      this.authDir = process.env.WHATSAPP_AUTH_DIR || path.join(process.cwd(), 'whatsapp_auth');
+    }
+
+    console.log(`📁 مسار حفظ جلسة واتساب المعتمد: ${this.authDir}`);
   }
 
   public getStatus() {
@@ -47,7 +54,6 @@ class WhatsAppService {
     }
   }
 
-  // للتوافق مع أي استدعاءات أخرى باسم disconnect
   public async disconnect(): Promise<void> {
     return this.logout();
   }
@@ -70,6 +76,7 @@ class WhatsAppService {
   }
 
   public async init(): Promise<void> {
+    // التأكد من وجود مجلد الحفظ في الـ Volume
     if (!fs.existsSync(this.authDir)) {
       fs.mkdirSync(this.authDir, { recursive: true });
     }
@@ -101,8 +108,9 @@ class WhatsAppService {
       if (connection === 'close') {
         this.qrCodeDataUrl = null;
         this.isConnected = false;
-        const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
-        console.log(`❌ انقطع اتصال واتساب. إعادة المحاولة: ${shouldReconnect}`);
+        const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
+        const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+        console.log(`❌ انقطع اتصال واتساب (كود: ${statusCode}). إعادة المحاولة: ${shouldReconnect}`);
 
         if (shouldReconnect) {
           setTimeout(() => {
@@ -112,7 +120,7 @@ class WhatsAppService {
       } else if (connection === 'open') {
         this.qrCodeDataUrl = null;
         this.isConnected = true;
-        console.log('✅ تم اتصال واتساب بالسيرفر بنجاح!');
+        console.log('✅ تم اتصال واتساب بالسيرفر بنجاح وحفظ الجلسة في القرص الثابت!');
       }
     });
 
@@ -124,7 +132,7 @@ class WhatsAppService {
 
         const senderJid = msg.key.remoteJid;
 
-        // فلترة قنوات الأخبار والحالات ورسائل البث
+        // فلترة قنوات الأخبار والحالات ورسائل البث لمنع استهلاك الموارد
         if (
           !senderJid ||
           senderJid.endsWith('@newsletter') ||
@@ -160,7 +168,7 @@ class WhatsAppService {
 
 export const whatsappService = new WhatsAppService();
 
-// تصدير دوال مساعدة إضافية للتوافق
+// تصدير الدوال المنفردة للحفاظ على التوافق التام مع بقية أجزاء المشروع
 export const initWhatsApp = () => whatsappService.init();
 export const getWhatsAppStatus = () => whatsappService.getStatus();
 export const disconnectWhatsApp = () => whatsappService.logout();
