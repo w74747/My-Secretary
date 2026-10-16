@@ -6,12 +6,13 @@ import makeWASocket, {
 import { Boom } from '@hapi/boom';
 import path from 'path';
 import fs from 'fs';
+import qrcode from 'qrcode';
 import { processUserMessage } from './ai.service';
 
 class WhatsAppService {
   private sock: WASocket | null = null;
-  private currentQrCode: string | null = null;
-  private connectionStatus: 'CONNECTED' | 'CONNECTING' | 'DISCONNECTED' = 'DISCONNECTED';
+  public qrCodeDataUrl: string | null = null;
+  public isConnected: boolean = false;
   private authDir: string;
 
   constructor() {
@@ -20,12 +21,12 @@ class WhatsAppService {
 
   public getStatus() {
     return {
-      status: this.connectionStatus,
-      qrCode: this.currentQrCode,
+      status: this.isConnected ? 'CONNECTED' : (this.qrCodeDataUrl ? 'CONNECTING' : 'DISCONNECTED'),
+      qrCode: this.qrCodeDataUrl,
     };
   }
 
-  public async disconnect(): Promise<void> {
+  public async logout(): Promise<void> {
     try {
       if (this.sock) {
         await this.sock.logout();
@@ -37,8 +38,8 @@ class WhatsAppService {
       if (fs.existsSync(this.authDir)) {
         fs.rmSync(this.authDir, { recursive: true, force: true });
       }
-      this.connectionStatus = 'DISCONNECTED';
-      this.currentQrCode = null;
+      this.isConnected = false;
+      this.qrCodeDataUrl = null;
       console.log('🧹 تم تصفير بيانات الجلسة بالكامل.');
       setTimeout(() => {
         this.init();
@@ -46,8 +47,13 @@ class WhatsAppService {
     }
   }
 
+  // للتوافق مع أي استدعاءات أخرى باسم disconnect
+  public async disconnect(): Promise<void> {
+    return this.logout();
+  }
+
   public async sendMessage(to: string, message: string): Promise<boolean> {
-    if (!this.sock || this.connectionStatus !== 'CONNECTED') {
+    if (!this.sock || !this.isConnected) {
       console.error('لا يمكن إرسال الرسالة، خدمة واتساب غير متصلة.');
       return false;
     }
@@ -79,18 +85,22 @@ class WhatsAppService {
 
     this.sock.ev.on('creds.update', saveCreds);
 
-    this.sock.ev.on('connection.update', (update) => {
+    this.sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update;
 
       if (qr) {
-        this.currentQrCode = qr;
-        this.connectionStatus = 'CONNECTING';
+        try {
+          this.qrCodeDataUrl = await qrcode.toDataURL(qr);
+        } catch {
+          this.qrCodeDataUrl = qr;
+        }
+        this.isConnected = false;
         console.log('📌 تم توليد رمز QR جديد لواتساب.');
       }
 
       if (connection === 'close') {
-        this.currentQrCode = null;
-        this.connectionStatus = 'DISCONNECTED';
+        this.qrCodeDataUrl = null;
+        this.isConnected = false;
         const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
         console.log(`❌ انقطع اتصال واتساب. إعادة المحاولة: ${shouldReconnect}`);
 
@@ -100,8 +110,8 @@ class WhatsAppService {
           }, 3000);
         }
       } else if (connection === 'open') {
-        this.currentQrCode = null;
-        this.connectionStatus = 'CONNECTED';
+        this.qrCodeDataUrl = null;
+        this.isConnected = true;
         console.log('✅ تم اتصال واتساب بالسيرفر بنجاح!');
       }
     });
@@ -114,7 +124,7 @@ class WhatsAppService {
 
         const senderJid = msg.key.remoteJid;
 
-        // تجاهل القنوات والحالات ورسائل البث
+        // فلترة قنوات الأخبار والحالات ورسائل البث
         if (
           !senderJid ||
           senderJid.endsWith('@newsletter') ||
@@ -150,8 +160,8 @@ class WhatsAppService {
 
 export const whatsappService = new WhatsAppService();
 
-// تصدير الدوال المنفردة للحفاظ على التوافق الكامل
+// تصدير دوال مساعدة إضافية للتوافق
 export const initWhatsApp = () => whatsappService.init();
 export const getWhatsAppStatus = () => whatsappService.getStatus();
-export const disconnectWhatsApp = () => whatsappService.disconnect();
+export const disconnectWhatsApp = () => whatsappService.logout();
 export const sendMessage = (to: string, msg: string) => whatsappService.sendMessage(to, msg);
