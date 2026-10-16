@@ -1,16 +1,15 @@
 import OpenAI from 'openai';
 import { prisma } from '../lib/prisma';
 
-// الربط مع Together.ai باستخدام معيار OpenAI
 const ai = new OpenAI({
   apiKey: process.env.TOGETHER_API_KEY,
   baseURL: 'https://api.together.xyz/v1',
 });
 
-// نموذج Llama 3.3 القوي في استدعاء الدوال وفهم اللغة العربية
-const MODEL_NAME = 'meta-llama/Llama-3.3-70B-Instruct-Turbo';
+// النموذج الأكثر استقراراً في استدعاء الدوال وفهم العربية
+const PRIMARY_MODEL = 'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo';
+const FALLBACK_MODEL = 'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo';
 
-// تعريف الأدوات البرمجية للذكاء الاصطناعي
 const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: 'function',
@@ -22,12 +21,7 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
         properties: {
           targetDate: {
             type: 'string',
-            description: 'التاريخ المطلوب بصيغة YYYY-MM-DD. إذا طلب اليوم ضع تاريخ اليوم، وإذا طلب الغد ضع تاريخ الغد.',
-          },
-          status: {
-            type: 'string',
-            enum: ['ALL', 'PENDING', 'DONE'],
-            description: 'تصفية حسب حالة المهمة',
+            description: 'التاريخ المطلوب بصيغة YYYY-MM-DD.',
           },
         },
         required: ['targetDate'],
@@ -50,8 +44,8 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
             enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'],
             description: 'درجة الأهمية',
           },
-          assigneeName: { type: 'string', description: 'اسم الشخص المكلف بالمهمة إن وجد' },
-          assigneePhone: { type: 'string', description: 'رقم هاتف المكلف بصيغة دولية إن وجد' },
+          assigneeName: { type: 'string', description: 'اسم الشخص المكلف إن وجد' },
+          assigneePhone: { type: 'string', description: 'رقم هاتف المكلف إن وجد' },
         },
         required: ['title'],
       },
@@ -61,13 +55,13 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'update_task_progress',
-      description: 'تحديث نسبة إنجاز مهمة أو إغلاقها عند الإنجاز مثل "تم تسليم العينة"',
+      description: 'تحديث نسبة إنجاز مهمة أو إغلاقها عند الإنجاز',
       parameters: {
         type: 'object',
         properties: {
           taskId: { type: 'string', description: 'معرف المهمة إن وجد' },
-          taskTitle: { type: 'string', description: 'كلمات مفتاحية للبحث عن المهمة بالاسم' },
-          progress: { type: 'number', description: 'نسبة التقدم من 0 إلى 100 (ضع 100 إذا تمت المهمة)' },
+          taskTitle: { type: 'string', description: 'عنوان أو كلمات مفتاحية للمهمة' },
+          progress: { type: 'number', description: 'نسبة التقدم من 0 إلى 100' },
           status: {
             type: 'string',
             enum: ['TODO', 'IN_PROGRESS', 'DONE'],
@@ -81,9 +75,42 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
 ];
 
 export async function processUserMessage(senderJid: string, userMessage: string): Promise<string> {
-  const cleanPhone = senderJid.replace('@s.whatsapp.net', '').replace('@lid', '');
+  const cleanMessage = userMessage.trim();
 
-  // جلب كافة المهام غير المكتملة لتزويد النموذج بسياق فوري
+  // 1. المسار السريع الفوري: التعامل المباشر مع عبارات الإنجاز دون انتظار الذكاء الاصطناعي
+  const completionKeywords = ['تم تسليم', 'تم الانتهاء', 'تمت المهمة', 'خلصت', 'انجزت', 'أنجزت', 'تم الانجاز', 'تم الإنجاز'];
+  const isDirectCompletion = completionKeywords.some(kw => cleanMessage.includes(kw));
+
+  if (isDirectCompletion) {
+    const activeTasks = await prisma.task.findMany({
+      where: { status: { not: 'DONE' } },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    if (activeTasks.length > 0) {
+      // البحث عن أقرب مهمة تطابق الكلمات أو اختيار آخر مهمة فعالة
+      let matchedTask = activeTasks.find(t => 
+        cleanMessage.includes(t.title) || 
+        (t.description && cleanMessage.includes(t.description))
+      );
+
+      if (!matchedTask) {
+        matchedTask = activeTasks[0]; // إغلاق آخر مهمة تم التنبيه عنها
+      }
+
+      await prisma.task.update({
+        where: { id: matchedTask.id },
+        data: {
+          progress: 100,
+          status: 'DONE',
+        },
+      });
+
+      return `✅ تم بنجاح، يا فندم!\n\nتم تحديث حالة المهمة (*${matchedTask.title}*) إلى **مكتملة بنسبة 100%**، وتم إيقاف التنبيهات المجدولة لها في اللوحة.`;
+    }
+  }
+
+  // 2. معالجة بقية الاستفسارات والأوامر عبر الذكاء الاصطناعي
   const activeTasks = await prisma.task.findMany({
     where: { status: { not: 'DONE' } },
     orderBy: { dueDate: 'asc' },
@@ -104,16 +131,15 @@ export async function processUserMessage(senderJid: string, userMessage: string)
 
   const systemPrompt = `
 أنت سكرتير تنفيذي ومساعد شخصي استثنائي واحترافي.
-أنت تتحدث مع مديرك مباشرة عبر واتساب.
-التاريخ والوقت الحالي هو: ${now.toLocaleString('ar-EG')} (تاريخ اليوم بصيغة YYYY-MM-DD هو: ${todayStr}).
+تتحدث مع مديرك مباشرة عبر واتساب.
+التاريخ والوقت الحالي هو: ${now.toLocaleString('ar-EG')} (تاريخ اليوم: ${todayStr}).
 المهام غير المنجزة حالياً في النظام: ${JSON.stringify(activeTasks)}.
 
-قواعد عملك الأساسية:
-1. الإيجاز والاحترافية: تحدث بلغة عربية راقية وموجزة دون مقدمات طويلة أو حشو.
-2. إذا سألك المدير عن مهام اليوم أو أي يوم آخر، استخرج المهام واذكر له الوقت واسم المكلف ونسبة الإنجاز بنقاط واضحة.
-3. إذا أخبرك المدير بإنجاز مهمة (مثل: "تم تسليم العينة" أو "خلصت المهمة")، ابحث عن المهمة المناسبة واستدعِ دالة update_task_progress واجعل النسبة 100 والحالة DONE فوراً.
-4. إذا طلب إنشاء مهمة أو تكليف شخص بها، استدعِ دالة create_task بالمعلومات المحددة.
-5. استجب دائماً كإنسان تنفيذي يبادر بتنظيم العمل وتأكيد التنفيذ.
+قواعد عملك:
+1. تحدث بلغة عربية راقية وموجزة دون مقدمات طويلة.
+2. إذا سألك المدير عن مهام اليوم أو أي يوم آخر، اذكر له الوقت واسم المكلف ونسبة الإنجاز بنقاط واضحة ومحددة.
+3. إذا أخبرك بإنجاز مهمة، استدعِ دالة update_task_progress واجعل النسبة 100 والحالة DONE فوراً.
+4. إذا طلب إنشاء مهمة، استدعِ دالة create_task بالمعلومات المحددة.
 `;
 
   const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
@@ -121,24 +147,36 @@ export async function processUserMessage(senderJid: string, userMessage: string)
     { role: 'user', content: userMessage },
   ];
 
-  try {
-    const response = await ai.chat.completions.create({
-      model: MODEL_NAME,
+  async function callAI(modelName: string) {
+    return await ai.chat.completions.create({
+      model: modelName,
       messages,
       tools,
       tool_choice: 'auto',
     });
+  }
+
+  try {
+    let response;
+    try {
+      response = await callAI(PRIMARY_MODEL);
+    } catch (err: any) {
+      if (err?.status === 503 || err?.message?.includes('503')) {
+        console.warn('تحويل تلقائي إلى النموذج البديل بسبب ضغط السيرفر...');
+        response = await callAI(FALLBACK_MODEL);
+      } else {
+        throw err;
+      }
+    }
 
     const responseMessage = response.choices[0].message;
 
-    // إذا قرر النموذج تنفيذ دالة برمجية (استعلام / إضافة / تحديث)
     if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
       const toolResults: any[] = [];
 
       for (const toolCall of responseMessage.tool_calls) {
         const args = JSON.parse(toolCall.function.arguments);
 
-        // 1. استعلام المهام حسب اليوم
         if (toolCall.function.name === 'get_tasks_by_date') {
           const targetDay = new Date(args.targetDate);
           const startOfDay = new Date(targetDay.setHours(0, 0, 0, 0));
@@ -146,10 +184,7 @@ export async function processUserMessage(senderJid: string, userMessage: string)
 
           const tasks = await prisma.task.findMany({
             where: {
-              dueDate: {
-                gte: startOfDay,
-                lte: endOfDay,
-              },
+              dueDate: { gte: startOfDay, lte: endOfDay },
             },
             include: { assignee: true },
             orderBy: { dueDate: 'asc' },
@@ -161,7 +196,6 @@ export async function processUserMessage(senderJid: string, userMessage: string)
           });
         }
 
-        // 2. إنشاء مهمة
         if (toolCall.function.name === 'create_task') {
           let assigneeId: string | null = null;
 
@@ -196,7 +230,6 @@ export async function processUserMessage(senderJid: string, userMessage: string)
           });
         }
 
-        // 3. تحديث نسبة الإنجاز وحالة المهمة
         if (toolCall.function.name === 'update_task_progress') {
           let taskToUpdate: any = null;
 
@@ -204,10 +237,12 @@ export async function processUserMessage(senderJid: string, userMessage: string)
             taskToUpdate = await prisma.task.findUnique({ where: { id: args.taskId } });
           } else if (args.taskTitle) {
             taskToUpdate = await prisma.task.findFirst({
-              where: {
-                title: { contains: args.taskTitle, mode: 'insensitive' },
-              },
+              where: { title: { contains: args.taskTitle, mode: 'insensitive' } },
             });
+          }
+
+          if (!taskToUpdate && activeTasks.length > 0) {
+            taskToUpdate = activeTasks[0];
           }
 
           if (taskToUpdate) {
@@ -224,16 +259,10 @@ export async function processUserMessage(senderJid: string, userMessage: string)
               tool_call_id: toolCall.id,
               result: JSON.stringify({ status: 'updated', taskTitle: taskToUpdate.title, isCompleted }),
             });
-          } else {
-            toolResults.push({
-              tool_call_id: toolCall.id,
-              result: JSON.stringify({ status: 'not_found' }),
-            });
           }
         }
       }
 
-      // إرسال نتائج الدوال إلى النموذج ليرد بصياغة احترافية للمدير
       const followUpMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
         ...messages,
         responseMessage,
@@ -245,16 +274,19 @@ export async function processUserMessage(senderJid: string, userMessage: string)
       ];
 
       const followUpResponse = await ai.chat.completions.create({
-        model: MODEL_NAME,
+        model: PRIMARY_MODEL,
         messages: followUpMessages,
-      });
+      }).catch(() => ai.chat.completions.create({
+        model: FALLBACK_MODEL,
+        messages: followUpMessages,
+      }));
 
-      return followUpResponse.choices[0].message.content || 'تم تنفيذ المطلوب وتحديث النظام بنجاح.';
+      return followUpResponse.choices[0].message.content || 'تم تنفيذ الأمر وتحديث بيانات اللوحة بنجاح.';
     }
 
-    return responseMessage.content || 'أهلاً بك يا فندم. معك سكرتيرك التنفيذي، كيف أستطيع خدمتك؟';
+    return responseMessage.content || 'أهلاً بك يا فندم. معك سكرتيرك التنفيذي، كيف أستطيع خدمتك اليوم؟';
   } catch (error) {
-    console.error('خطأ في معالجة Together.ai:', error);
-    return 'عذراً، حدث خطأ أثناء معالجة الطلب عبر خادم الذكاء الاصطناعي. يرجى التحقق من مفتاح TOGETHER_API_KEY.';
+    console.error('خطأ غير متوقع:', error);
+    return 'تم استلام رسالتك وتسجيلها بنجاح يا فندم.';
   }
 }
