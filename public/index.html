@@ -13,7 +13,7 @@
 </head>
 <body class="text-slate-800 antialiased min-h-screen flex flex-col">
 
-  <!-- شريط التنقل -->
+  <!-- شريط التنقل العلوي مع فحص الاتصال الحقيقي -->
   <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
       <div class="flex items-center gap-3">
@@ -22,22 +22,28 @@
         </div>
         <div>
           <h1 class="text-lg font-bold text-slate-900 leading-tight">السكرتير التنفيذي الذكي</h1>
-          <p class="text-xs text-slate-500">إدارة ومتابعة المهام التلقائية</p>
+          <p class="text-xs text-slate-500">إدارة ومتابعة المهام والتنبيهات</p>
         </div>
       </div>
 
       <div class="flex items-center gap-3">
-        <div class="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-          <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>واتساب متصل ومفعل</span>
+        <!-- شارة الحالة الحية للواتساب -->
+        <div id="connectionBadge" class="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200 transition">
+          <span id="connectionDot" class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+          <span id="connectionText">جاري فحص الاتصال...</span>
         </div>
-        <button onclick="disconnectWhatsApp()" class="px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-xl transition flex items-center gap-1.5">
+        <button id="logoutBtn" onclick="disconnectWhatsApp()" class="hidden px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-xl transition items-center gap-1.5">
           <i class="fa-solid fa-arrow-right-from-bracket"></i>
           <span>إنهاء الاتصال</span>
         </button>
       </div>
     </div>
   </header>
+
+  <!-- تنبيه يظهر أعلى الشاشة إذا كان الواتساب يحتاج مسح كود -->
+  <div id="qrBanner" class="hidden bg-amber-500 text-white px-4 py-3 text-center text-sm font-bold shadow-md cursor-pointer hover:bg-amber-600 transition" onclick="openQrModal()">
+    ⚠️ خدمة واتساب غير متصلة حالياً! اضغط هنا لمسح رمز QR وتفعيل الإشعارات والتذكيرات فوراً.
+  </div>
 
   <!-- المحتوى الرئيسي -->
   <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -85,7 +91,7 @@
       </div>
     </div>
 
-    <!-- التحكم والإضافة -->
+    <!-- شريط التحكم وزر الإضافة -->
     <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
       <div>
         <h2 class="text-xl font-extrabold text-slate-900">لوحة تتبع المهام المرئية</h2>
@@ -103,8 +109,7 @@
 
     <!-- أعمدة مراحل العمل -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-      
-      <!-- الانتظار -->
+      <!-- في الانتظار -->
       <div class="bg-slate-100/70 p-4 rounded-2xl border border-slate-200 flex flex-col">
         <div class="flex items-center justify-between mb-4">
           <span class="font-bold text-slate-700 flex items-center gap-2">
@@ -136,11 +141,22 @@
         </div>
         <div id="colDone" class="space-y-3 flex-1 overflow-y-auto max-h-[600px]"></div>
       </div>
-
     </div>
   </main>
 
-  <!-- نافذة إضافة / تعديل المهمة والتذكير -->
+  <!-- نافذة مسح الرمز QR إذا كان غير متصل -->
+  <div id="qrModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-6 text-center space-y-4 shadow-2xl">
+      <h3 class="font-bold text-lg text-slate-900">ربط واتساب بالسيرفر</h3>
+      <p class="text-xs text-slate-500">افتح واتساب في هاتفك > الأجهزة المرتبطة > ربط جهاز، وامسح الرمز أدناه:</p>
+      <div class="flex justify-center">
+        <img id="qrImage" src="" alt="كود QR" class="w-64 h-64 border border-slate-200 rounded-xl p-2">
+      </div>
+      <button onclick="closeQrModal()" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs">إغلاق</button>
+    </div>
+  </div>
+
+  <!-- نافذة إضافة / تعديل المهمة -->
   <div id="taskModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
     <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto">
       <div class="flex items-center justify-between mb-4">
@@ -153,7 +169,7 @@
 
         <div>
           <label class="block text-xs font-semibold text-slate-600 mb-1">عنوان المهمة أو الهدف *</label>
-          <input type="text" id="taskTitleInput" required class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none" placeholder="مثال: مراجعة خطة التسويق">
+          <input type="text" id="taskTitleInput" required class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none" placeholder="مثال: تسليم عينة The Ribs">
         </div>
         
         <div>
@@ -161,7 +177,6 @@
           <textarea id="taskDescInput" rows="2" class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none" placeholder="المعايير أو الملاحظات المطلوبة..."></textarea>
         </div>
 
-        <!-- الشخص المكلف -->
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-xs font-semibold text-slate-600 mb-1">المكلف بالمهمة</label>
@@ -173,7 +188,6 @@
           </div>
         </div>
 
-        <!-- التاريخ والوقت والأولوية -->
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-xs font-semibold text-slate-600 mb-1">تاريخ ووقت الاستحقاق *</label>
@@ -190,7 +204,7 @@
           </div>
         </div>
 
-        <!-- قسم إعدادات التذكير والتنبيهات المتقدمة -->
+        <!-- إعدادات التذكير -->
         <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
           <div class="flex items-center gap-2 text-xs font-bold text-slate-800">
             <i class="fa-regular fa-bell text-emerald-600"></i>
@@ -203,19 +217,19 @@
               <select id="reminderTypeInput" onchange="toggleReminderOptions()" class="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
                 <option value="NONE">بدون تذكير آلي</option>
                 <option value="EXACT">في نفس وقت الموعد تماماً</option>
-                <option value="BEFORE">قبل الموعد بمقدار محدد</option>
+                <option value="BEFORE" selected>قبل الموعد بمقدار محدد</option>
                 <option value="EVERY_X_HOURS">تكرار دوري (كل عدد ساعات)</option>
               </select>
             </div>
 
-            <div id="reminderOffsetContainer" class="hidden">
+            <div id="reminderOffsetContainer">
               <label id="reminderOffsetLabel" class="block text-[11px] font-semibold text-slate-500 mb-1">المدة</label>
               <select id="reminderOffsetInput" class="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
-                <option value="15">قبل 15 دقيقة</option>
-                <option value="30">قبل 30 دقيقة</option>
-                <option value="60" selected>قبل ساعة واحدة</option>
-                <option value="120">قبل ساعتين</option>
-                <option value="1440">قبل يوم كامل</option>
+                <option value="15">15 دقيقة</option>
+                <option value="30">30 دقيقة</option>
+                <option value="60" selected>ساعة واحدة</option>
+                <option value="120">ساعتين</option>
+                <option value="1440">يوم كامل</option>
               </select>
             </div>
           </div>
@@ -236,6 +250,60 @@
 
   <script>
     let allTasksCache = [];
+    let currentQrCode = null;
+
+    // فحص دوري لحالة الاتصال الحقيقية بواتساب
+    async function checkWhatsAppStatus() {
+      try {
+        const res = await fetch('/api/whatsapp/status');
+        const data = await res.json();
+
+        const badge = document.getElementById('connectionBadge');
+        const dot = document.getElementById('connectionDot');
+        const text = document.getElementById('connectionText');
+        const banner = document.getElementById('qrBanner');
+        const logoutBtn = document.getElementById('logoutBtn');
+
+        currentQrCode = data.qrCode;
+
+        if (data.isConnected) {
+          badge.className = "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200";
+          dot.className = "w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse";
+          text.innerText = "واتساب متصل ومفعل";
+          banner.classList.add('hidden');
+          logoutBtn.classList.remove('hidden');
+          logoutBtn.classList.add('flex');
+        } else {
+          badge.className = "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 cursor-pointer";
+          badge.onclick = openQrModal;
+          dot.className = "w-2.5 h-2.5 rounded-full bg-amber-500";
+          text.innerText = "غير متصل (اضغط للمسح)";
+          banner.classList.remove('hidden');
+          logoutBtn.classList.add('hidden');
+
+          if (data.qrCode) {
+            document.getElementById('qrImage').src = data.qrCode;
+          }
+        }
+      } catch (err) {
+        console.error('خطأ فحص اتصال واتساب:', err);
+      }
+    }
+
+    function openQrModal() {
+      if (currentQrCode) {
+        document.getElementById('qrImage').src = currentQrCode;
+        document.getElementById('qrModal').classList.remove('hidden');
+        document.getElementById('qrModal').classList.add('flex');
+      } else {
+        alert('جاري توليد رمز الـ QR من السيرفر، يرجى الانتظار ثوانٍ معدودة...');
+      }
+    }
+
+    function closeQrModal() {
+      document.getElementById('qrModal').classList.add('hidden');
+      document.getElementById('qrModal').classList.remove('flex');
+    }
 
     function toggleReminderOptions() {
       const type = document.getElementById('reminderTypeInput').value;
@@ -433,7 +501,11 @@
       const title = document.getElementById('taskTitleInput').value;
       const description = document.getElementById('taskDescInput').value;
       const priority = document.getElementById('taskPriorityInput').value;
-      const dueDate = document.getElementById('taskDueDateInput').value;
+      
+      // تحويل التاريخ لصيغة ISO كاملة مع مراعاة المنطقة الزمنية للمستخدم
+      const rawDate = document.getElementById('taskDueDateInput').value;
+      const dueDate = rawDate ? new Date(rawDate).toISOString() : null;
+
       const assigneeName = document.getElementById('taskAssigneeNameInput').value;
       const assigneePhone = document.getElementById('taskAssigneePhoneInput').value;
       const reminderType = document.getElementById('reminderTypeInput').value;
@@ -447,14 +519,12 @@
       };
 
       if (id) {
-        // تعديل مهمة حالية
         await fetch('/api/tasks/' + id, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
       } else {
-        // إنشاء مهمة جديدة
         await fetch('/api/tasks', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -486,14 +556,16 @@
       if (!confirm('هل تريد إنهاء جلسة الواتساب الحالية ومسح كود جديد؟')) return;
       try {
         await fetch('/api/whatsapp/logout', { method: 'POST' });
-        window.location.reload();
+        checkWhatsAppStatus();
       } catch (e) {
         alert('حدث خطأ أثناء إنهاء الاتصال.');
       }
     }
 
     loadTasks();
+    checkWhatsAppStatus();
     setInterval(loadTasks, 5000);
+    setInterval(checkWhatsAppStatus, 5000);
   </script>
 </body>
 </html>
