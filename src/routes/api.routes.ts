@@ -4,146 +4,105 @@ import { whatsappService } from '../services/whatsapp.service';
 
 const router = Router();
 
-// -----------------------------
-// 1. حالة الواتساب ورمز الـ QR
-// -----------------------------
-router.get('/whatsapp/status', (req: Request, res: Response) => {
-  res.json({
-    connected: whatsappService.isConnected,
-    qrCode: whatsappService.qrCodeDataUrl,
-  });
-});
-
-// -----------------------------
-// 2. إدارة المشاريع (Projects)
-// -----------------------------
-router.get('/projects', async (req: Request, res: Response) => {
-  try {
-    const projects = await prisma.project.findMany({
-      orderBy: { orderIndex: 'asc' },
-      include: {
-        tasks: {
-          include: {
-            assignee: true,
-            subtasks: { orderBy: { orderIndex: 'asc' } },
-          },
-          orderBy: { orderIndex: 'asc' },
-        },
-      },
-    });
-    res.json(projects);
-  } catch (error) {
-    res.status(500).json({ error: 'تعذر جلب المشاريع' });
-  }
-});
-
-router.post('/projects', async (req: Request, res: Response) => {
-  try {
-    const { title, description, color, deadline } = req.body;
-    const project = await prisma.project.create({
-      data: {
-        title,
-        description,
-        color: color || '#8B5CF6',
-        deadline: deadline ? new Date(deadline) : null,
-      },
-    });
-    res.status(201).json(project);
-  } catch (error) {
-    res.status(500).json({ error: 'تعذر إنشاء المشروع' });
-  }
-});
-
-// -----------------------------
-// 3. إدارة المهام والبطاقات (Tasks)
-// -----------------------------
+// جلب جميع المهام
 router.get('/tasks', async (req: Request, res: Response) => {
   try {
     const tasks = await prisma.task.findMany({
-      include: {
-        assignee: true,
-        subtasks: { orderBy: { orderIndex: 'asc' } },
-        project: true,
-      },
-      orderBy: { orderIndex: 'asc' },
+      orderBy: { createdAt: 'desc' },
+      include: { assignee: true },
     });
     res.json(tasks);
   } catch (error) {
-    res.status(500).json({ error: 'تعذر جلب المهام' });
+    res.status(500).json({ error: 'خطأ أثناء جلب المهام' });
   }
 });
 
+// إضافة مهمة جديدة وإرسال إشعار واتساب فوراً
 router.post('/tasks', async (req: Request, res: Response) => {
   try {
-    const { title, description, projectId, assigneeId, dueDate, priority, timerEnd } = req.body;
-    const task = await prisma.task.create({
+    const { title, description, priority, dueDate, assigneeName, assigneePhone } = req.body;
+
+    let assigneeId: string | null = null;
+
+    // تسجيل الشخص المسؤول إذا تم إدخال اسمه
+    if (assigneeName && assigneeName.trim()) {
+      let contact = await prisma.contact.findFirst({
+        where: { name: assigneeName.trim() },
+      });
+
+      if (!contact) {
+        contact = await prisma.contact.create({
+          data: {
+            name: assigneeName.trim(),
+            phoneNumber: assigneePhone ? assigneePhone.replace(/\D/g, '') : '',
+          },
+        });
+      }
+      assigneeId = contact.id;
+    }
+
+    const newTask = await prisma.task.create({
       data: {
         title,
-        description,
-        projectId: projectId || null,
-        assigneeId: assigneeId || null,
+        description: description || null,
         priority: priority || 'MEDIUM',
         dueDate: dueDate ? new Date(dueDate) : null,
-        timerEnd: timerEnd ? new Date(timerEnd) : null,
+        assigneeId,
       },
-      include: { assignee: true, subtasks: true },
+      include: { assignee: true },
     });
-    res.status(201).json(task);
+
+    // إرسال إشعار واتساب للمالك وللشخص المسؤول (إن توفر رقمه)
+    const targetPhone = assigneePhone || process.env.OWNER_PHONE;
+    if (targetPhone && whatsappService.isConnected) {
+      const formattedDate = newTask.dueDate
+        ? new Date(newTask.dueDate).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' })
+        : 'غير محدد';
+
+      const alertMsg = `📌 *مهمة جديدة مسجلة:*\n\n` +
+        `🔹 *العنوان:* ${newTask.title}\n` +
+        `📝 *التفاصيل:* ${newTask.description || 'لا يوجد'}\n` +
+        `⏳ *موعد التسليم:* ${formattedDate}\n` +
+        `👤 *المسؤول:* ${assigneeName || 'المدير'}\n` +
+        `🚨 *الأولوية:* ${newTask.priority}`;
+
+      whatsappService.sendMessage(targetPhone, alertMsg).catch(err => {
+        console.error('خطأ إرسال إشعار الواتساب:', err);
+      });
+    }
+
+    res.status(201).json(newTask);
   } catch (error) {
-    res.status(500).json({ error: 'تعذر إنشاء المهمة' });
+    console.error(error);
+    res.status(500).json({ error: 'فشل في إنشاء المهمة' });
   }
 });
 
-// تحديث مهمة (بياناتها، حالتها، نسبتها، أو ترتيبها بالسحب والإفلات)
+// تحديث المهمة
 router.patch('/tasks/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { title, description, status, progress, orderIndex, dueDate, timerEnd, assigneeId } = req.body;
+    const { progress, status } = req.body;
 
     const updatedTask = await prisma.task.update({
       where: { id },
-      data: {
-        ...(title !== undefined && { title }),
-        ...(description !== undefined && { description }),
-        ...(status !== undefined && { status }),
-        ...(progress !== undefined && { progress }),
-        ...(orderIndex !== undefined && { orderIndex }),
-        ...(dueDate !== undefined && { dueDate: dueDate ? new Date(dueDate) : null }),
-        ...(timerEnd !== undefined && { timerEnd: timerEnd ? new Date(timerEnd) : null }),
-        ...(assigneeId !== undefined && { assigneeId }),
-      },
-      include: { assignee: true, subtasks: true },
+      data: { progress, status },
     });
 
     res.json(updatedTask);
   } catch (error) {
-    res.status(500).json({ error: 'تعذر تحديث المهمة' });
+    res.status(500).json({ error: 'خطأ أثناء تحديث المهمة' });
   }
 });
 
-// -----------------------------
-// 4. جهات الاتصال والمساعدين (Contacts)
-// -----------------------------
-router.get('/contacts', async (req: Request, res: Response) => {
+// حذف المهمة
+router.delete('/tasks/:id', async (req: Request, res: Response) => {
   try {
-    const contacts = await prisma.contact.findMany({
-      orderBy: { createdAt: 'desc' },
-    });
-    res.json(contacts);
+    const { id } = req.params;
+    await prisma.task.delete({ where: { id } });
+    res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: 'تعذر جلب جهات الاتصال' });
-  }
-});
-
-router.post('/contacts', async (req: Request, res: Response) => {
-  try {
-    const { name, phoneNumber, role } = req.body;
-    const contact = await prisma.contact.create({
-      data: { name, phoneNumber, role },
-    });
-    res.status(201).json(contact);
-  } catch (error) {
-    res.status(500).json({ error: 'تعذر إضافة جهة الاتصال' });
+    res.status(500).json({ error: 'خطأ أثناء حذف المهمة' });
   }
 });
 
