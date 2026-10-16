@@ -8,6 +8,7 @@ import path from 'path';
 import fs from 'fs';
 import qrcode from 'qrcode';
 import { processUserMessage } from './ai.service';
+import { prisma } from '../lib/prisma';
 
 class WhatsAppService {
   private sock: WASocket | null = null;
@@ -16,13 +17,11 @@ class WhatsAppService {
   private authDir: string;
 
   constructor() {
-    // التحقق من وجود مسار القرص الثابت (Volume) في Railway
     if (process.env.RAILWAY_VOLUME_MOUNT_PATH) {
       this.authDir = path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'whatsapp_auth');
     } else {
       this.authDir = process.env.WHATSAPP_AUTH_DIR || path.join(process.cwd(), 'whatsapp_auth');
     }
-
     console.log(`📁 مسار حفظ جلسة واتساب المعتمد: ${this.authDir}`);
   }
 
@@ -76,7 +75,6 @@ class WhatsAppService {
   }
 
   public async init(): Promise<void> {
-    // التأكد من وجود مجلد الحفظ في الـ Volume
     if (!fs.existsSync(this.authDir)) {
       fs.mkdirSync(this.authDir, { recursive: true });
     }
@@ -85,7 +83,7 @@ class WhatsAppService {
 
     this.sock = makeWASocket({
       auth: state,
-      printQRInTerminal: true,
+      printQRInTerminal: false,
       defaultQueryTimeoutMs: 60000,
       browser: ['Executive Secretary', 'Chrome', '1.0.0'],
     });
@@ -132,7 +130,7 @@ class WhatsAppService {
 
         const senderJid = msg.key.remoteJid;
 
-        // فلترة قنوات الأخبار والحالات ورسائل البث لمنع استهلاك الموارد
+        // تجاهل قنوات الأخبار والحالات
         if (
           !senderJid ||
           senderJid.endsWith('@newsletter') ||
@@ -150,10 +148,57 @@ class WhatsAppService {
 
         if (!text || text.trim() === '') continue;
 
-        console.log(`📩 رسالة واردة من [${senderJid}]: ${text}`);
+        const cleanText = text.trim();
+        console.log(`📩 رسالة واردة من [${senderJid}]: ${cleanText}`);
 
         try {
-          const replyText = await processUserMessage(senderJid, text);
+          // فحص هل المرسل مكلّف بمهمة ويرد بإنجازها (مثل "تم"، "خلصت"، "أنجزت")
+          const isDoneReply = /^(تم|خلصت|أنجزت|انجزت|جاهز|سويتها|تمت)\b/i.test(cleanText);
+          const senderCleanPhone = senderJid.replace(/\D/g, '');
+
+          const assignedTask = await prisma.task.findFirst({
+            where: {
+              status: { not: 'DONE' },
+              assignee: {
+                phoneNumber: { contains: senderCleanPhone.slice(-8) },
+              },
+            },
+            include: { assignee: true },
+          });
+
+          // إذا كان مكلّفاً ويرد بـ "تم"
+          if (assignedTask && isDoneReply) {
+            await prisma.task.update({
+              where: { id: assignedTask.id },
+              data: { status: 'DONE', progress: 100 },
+            });
+
+            await this.sock?.sendMessage(senderJid, {
+              text: 'يعطيك العافية، تم تحديث حالة المهمة كـ مكتملة في النظام.',
+            }, { quoted: msg });
+
+            // إشعار المدير بإتمام المهمة
+            const ownerPhone = process.env.OWNER_PHONE;
+            if (ownerPhone) {
+              await this.sendMessage(
+                ownerPhone,
+                `✅ أفاد المكلف *${assignedTask.assignee?.name || ''}* بإنجاز المهمة:\n📌 ${assignedTask.title}`
+              );
+            }
+            continue;
+          }
+
+          // فحص هل الرسالة تحتوي على أمر لإنشاء مهمة أو استعلام جدول
+          const hasTaskIntent = /(?:مهمه|مهمة|ذكر|ذَكِّر|ذكرني|سجل|أضف|اضف|كلف|كلّف|بلغ|بلّغ|أخبر|اخبر|خبر|قل لـ?|قول لـ?|خلي|خلّي|وصي|وصّي|ارسل لـ?|أرسل لـ?|ايش عندي|شو عندي|جدول)/i.test(cleanText);
+
+          // إذا لم تكن هناك نية مهمة وكانت دردشة عادية من شخص آخر، نتجاهلها لعدم إحراج المستخدم
+          if (!hasTaskIntent) {
+            console.log(`ℹ️ تم تجاهل الرد الآلي لأن الرسالة دردشة شخصية عادية وليست أمراً: [${cleanText}]`);
+            continue;
+          }
+
+          // معالجة المهمة
+          const replyText = await processUserMessage(senderJid, cleanText);
 
           if (replyText && this.sock) {
             await this.sock.sendMessage(senderJid, { text: replyText }, { quoted: msg });
@@ -168,7 +213,6 @@ class WhatsAppService {
 
 export const whatsappService = new WhatsAppService();
 
-// تصدير الدوال المنفردة للحفاظ على التوافق التام مع بقية أجزاء المشروع
 export const initWhatsApp = () => whatsappService.init();
 export const getWhatsAppStatus = () => whatsappService.getStatus();
 export const disconnectWhatsApp = () => whatsappService.logout();
