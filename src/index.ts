@@ -6,6 +6,7 @@ import cors from 'cors';
 import path from 'path';
 import apiRoutes from './routes/api.routes';
 import { whatsappService } from './services/whatsapp.service';
+import { prisma } from './lib/prisma';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -13,10 +14,8 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// مسارات الـ API للوحة التحكم والمهام
 app.use('/api', apiRoutes);
 
-// مسار إنهاء جلسة الواتساب يدوياً من داخل المنصة
 app.post('/api/whatsapp/logout', async (req: Request, res: Response) => {
   try {
     await whatsappService.logout();
@@ -26,10 +25,8 @@ app.post('/api/whatsapp/logout', async (req: Request, res: Response) => {
   }
 });
 
-// خدمة ملفات لوحة التحكم الثابتة مباشرة
 app.use(express.static(path.join(process.cwd(), 'public')));
 
-// الصفحة الرئيسية: تعرض لوحة التحكم إذا كان الواتساب متصلاً، أو رمز QR عند الحاجة لربط جديد
 app.get('/', (req: Request, res: Response) => {
   if (whatsappService.isConnected) {
     return res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
@@ -65,20 +62,84 @@ app.get('/', (req: Request, res: Response) => {
   return res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
 });
 
-// فحص صحة الخادم
-app.get('/health', (req: Request, res: Response) => {
-  res.json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    whatsappConnected: whatsappService.isConnected,
-  });
-});
+// محرك فحص وإرسال التذكيرات التلقائية عبر واتساب كل 60 ثانية
+async function runReminderEngine() {
+  if (!whatsappService.isConnected) return;
+
+  try {
+    const now = new Date();
+    // جلب المهام غير المكتملة التي لها موعد محدد ونظام تذكير
+    const tasks = await prisma.task.findMany({
+      where: {
+        status: { not: 'DONE' },
+        progress: { lt: 100 },
+        dueDate: { not: null },
+        reminderType: { not: 'NONE' },
+      },
+      include: { assignee: true },
+    });
+
+    for (const task of tasks) {
+      if (!task.dueDate) continue;
+      const dueTime = new Date(task.dueDate).getTime();
+      const currentTime = now.getTime();
+      let shouldSend = false;
+
+      // 1. تذكير في نفس الوقت المحدد
+      if (task.reminderType === 'EXACT') {
+        const diffMinutes = Math.abs(currentTime - dueTime) / (1000 * 60);
+        if (diffMinutes <= 2 && (!task.lastReminderSent || (currentTime - new Date(task.lastReminderSent).getTime()) > 3600000)) {
+          shouldSend = true;
+        }
+      }
+
+      // 2. تذكير قبل الموعد بمدة معينة (بالدقائق)
+      if (task.reminderType === 'BEFORE') {
+        const targetTime = dueTime - (task.reminderOffset * 60 * 1000);
+        const diffMinutes = Math.abs(currentTime - targetTime) / (1000 * 60);
+        if (diffMinutes <= 2 && (!task.lastReminderSent || (currentTime - new Date(task.lastReminderSent).getTime()) > 3600000)) {
+          shouldSend = true;
+        }
+      }
+
+      // 3. تذكير كل عدد من الساعات
+      if (task.reminderType === 'EVERY_X_HOURS') {
+        const hoursIntervalMs = task.reminderOffset * 60 * 60 * 1000;
+        if (!task.lastReminderSent || (currentTime - new Date(task.lastReminderSent).getTime()) >= hoursIntervalMs) {
+          shouldSend = true;
+        }
+      }
+
+      if (shouldSend) {
+        const recipient = task.assignee?.phoneNumber || process.env.OWNER_PHONE;
+        if (recipient) {
+          const reminderMsg = `⏰ *تذكير من السكرتير التنفيذي:*\n\n` +
+            `🔹 *المهمة:* ${task.title}\n` +
+            `📝 *التفاصيل:* ${task.description || 'لا توجد ملاحظات'}\n` +
+            `⏳ *موعد التسليم:* ${new Date(task.dueDate).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' })}\n` +
+            `📊 *نسبة الإنجاز الحالية:* ${task.progress}%`;
+
+          await whatsappService.sendMessage(recipient, reminderMsg);
+          await prisma.task.update({
+            where: { id: task.id },
+            data: { lastReminderSent: now },
+          });
+          console.log(`🔔 تم إرسال تذكير بالمهمة [${task.title}] إلى [${recipient}]`);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('خطأ في محرك التذكيرات:', err);
+  }
+}
 
 app.listen(PORT, async () => {
   console.log(`🚀 السيرفر يعمل الآن بنجاح على المنفذ: ${PORT}`);
   try {
     console.log('🔄 جاري تشغيل ومزامنة خدمة واتساب...');
     await whatsappService.init();
+    // تشغيل محرك التذكيرات كل دقيقة
+    setInterval(runReminderEngine, 60000);
   } catch (error) {
     console.error('❌ حدث خطأ أثناء تشغيل خدمة واتساب:', error);
   }
