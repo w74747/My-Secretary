@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>لوحة تحكم السكرتير الذكي</title>
-  <!-- مكتبة التنسيق والأيقونات -->
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -14,7 +13,7 @@
 </head>
 <body class="text-slate-800 antialiased min-h-screen flex flex-col">
 
-  <!-- شريط التنقل العلوي -->
+  <!-- شريط التنقل -->
   <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
       <div class="flex items-center gap-3">
@@ -43,7 +42,7 @@
   <!-- المحتوى الرئيسي -->
   <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
-    <!-- الإحصائيات العامة -->
+    <!-- الإحصائيات -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
         <div>
@@ -86,17 +85,17 @@
       </div>
     </div>
 
-    <!-- شريط التحكم وزر الإضافة -->
+    <!-- التحكم والإضافة -->
     <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
       <div>
         <h2 class="text-xl font-extrabold text-slate-900">لوحة تتبع المهام المرئية</h2>
-        <p class="text-xs text-slate-500 mt-0.5">لوحة ذكية لعرض ومتابعة مراحل إنجاز الأعمال لحظة بلحظة</p>
+        <p class="text-xs text-slate-500 mt-0.5">لوحة ذكية لعرض ومتابعة مراحل إنجاز الأعمال وإرسال التنبيهات المجدولة</p>
       </div>
       <div class="flex items-center gap-2 w-full sm:w-auto">
         <button onclick="loadTasks()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-xl transition flex items-center gap-2">
           <i class="fa-solid fa-rotate-right"></i> تحديث اللوحة
         </button>
-        <button onclick="openAddTaskModal()" class="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold rounded-xl shadow-md transition flex items-center gap-2">
+        <button onclick="openCreateModal()" class="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold rounded-xl shadow-md transition flex items-center gap-2">
           <i class="fa-solid fa-plus"></i> مهمة جديدة
         </button>
       </div>
@@ -105,7 +104,7 @@
     <!-- أعمدة مراحل العمل -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
       
-      <!-- العمود الأول: قيد الانتظار -->
+      <!-- الانتظار -->
       <div class="bg-slate-100/70 p-4 rounded-2xl border border-slate-200 flex flex-col">
         <div class="flex items-center justify-between mb-4">
           <span class="font-bold text-slate-700 flex items-center gap-2">
@@ -116,7 +115,7 @@
         <div id="colTodo" class="space-y-3 flex-1 overflow-y-auto max-h-[600px]"></div>
       </div>
 
-      <!-- العمود الثاني: جاري العمل -->
+      <!-- جاري التنفيذ -->
       <div class="bg-slate-100/70 p-4 rounded-2xl border border-slate-200 flex flex-col">
         <div class="flex items-center justify-between mb-4">
           <span class="font-bold text-slate-700 flex items-center gap-2">
@@ -127,7 +126,7 @@
         <div id="colInProgress" class="space-y-3 flex-1 overflow-y-auto max-h-[600px]"></div>
       </div>
 
-      <!-- العمود الثالث: منجزة -->
+      <!-- مكتملة -->
       <div class="bg-slate-100/70 p-4 rounded-2xl border border-slate-200 flex flex-col">
         <div class="flex items-center justify-between mb-4">
           <span class="font-bold text-slate-700 flex items-center gap-2">
@@ -141,28 +140,31 @@
     </div>
   </main>
 
-  <!-- نافذة إضافة مهمة جديدة -->
+  <!-- نافذة إضافة / تعديل المهمة والتذكير -->
   <div id="taskModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
-    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto">
       <div class="flex items-center justify-between mb-4">
-        <h3 class="font-bold text-lg text-slate-900">إضافة مهمة جديدة وإرسال إشعار</h3>
-        <button onclick="closeAddTaskModal()" class="text-slate-400 hover:text-slate-600 text-lg"><i class="fa-solid fa-xmark"></i></button>
+        <h3 id="modalTitle" class="font-bold text-lg text-slate-900">إضافة مهمة وتحديد التذكير</h3>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 text-lg"><i class="fa-solid fa-xmark"></i></button>
       </div>
-      <form id="createTaskForm" onsubmit="handleCreateTask(event)" class="space-y-4">
+      
+      <form id="taskForm" onsubmit="handleFormSubmit(event)" class="space-y-4">
+        <input type="hidden" id="taskIdInput">
+
         <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">عنوان المهمة *</label>
-          <input type="text" id="taskTitleInput" required class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none" placeholder="مثال: تسليم عينات اللحوم والتأكيد على المورد">
+          <label class="block text-xs font-semibold text-slate-600 mb-1">عنوان المهمة أو الهدف *</label>
+          <input type="text" id="taskTitleInput" required class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none" placeholder="مثال: مراجعة خطة التسويق">
         </div>
         
         <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">تفاصيل وملاحظات المهمة</label>
-          <textarea id="taskDescInput" rows="2" class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none" placeholder="اكتب التعليمات أو الملاحظات المطلوبة هنا..."></textarea>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">تفاصيل وملاحظات</label>
+          <textarea id="taskDescInput" rows="2" class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none" placeholder="المعايير أو الملاحظات المطلوبة..."></textarea>
         </div>
 
-        <!-- حقول المسؤول -->
+        <!-- الشخص المكلف -->
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">الشخص المسؤول (المكلف)</label>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">المكلف بالمهمة</label>
             <input type="text" id="taskAssigneeNameInput" class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none" placeholder="مثال: أحمد">
           </div>
           <div>
@@ -174,7 +176,7 @@
         <!-- التاريخ والوقت والأولوية -->
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">تاريخ ووقت التسليم المحدد *</label>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">تاريخ ووقت الاستحقاق *</label>
             <input type="datetime-local" id="taskDueDateInput" required class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none">
           </div>
           <div>
@@ -188,19 +190,89 @@
           </div>
         </div>
 
+        <!-- قسم إعدادات التذكير والتنبيهات المتقدمة -->
+        <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+          <div class="flex items-center gap-2 text-xs font-bold text-slate-800">
+            <i class="fa-regular fa-bell text-emerald-600"></i>
+            <span>إعدادات التذكير والتنبيه التلقائي عبر واتساب</span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-500 mb-1">نوع وموعد التذكير</label>
+              <select id="reminderTypeInput" onchange="toggleReminderOptions()" class="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                <option value="NONE">بدون تذكير آلي</option>
+                <option value="EXACT">في نفس وقت الموعد تماماً</option>
+                <option value="BEFORE">قبل الموعد بمقدار محدد</option>
+                <option value="EVERY_X_HOURS">تكرار دوري (كل عدد ساعات)</option>
+              </select>
+            </div>
+
+            <div id="reminderOffsetContainer" class="hidden">
+              <label id="reminderOffsetLabel" class="block text-[11px] font-semibold text-slate-500 mb-1">المدة</label>
+              <select id="reminderOffsetInput" class="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                <option value="15">قبل 15 دقيقة</option>
+                <option value="30">قبل 30 دقيقة</option>
+                <option value="60" selected>قبل ساعة واحدة</option>
+                <option value="120">قبل ساعتين</option>
+                <option value="1440">قبل يوم كامل</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 pt-1">
+            <input type="checkbox" id="repeatDailyInput" class="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500">
+            <label for="repeatDailyInput" class="text-xs font-semibold text-slate-600 cursor-pointer">تكرار التنبيه يومياً حتى يتم إنجاز المهمة</label>
+          </div>
+        </div>
+
         <div class="pt-2 flex items-center justify-end gap-2">
-          <button type="button" onclick="closeAddTaskModal()" class="px-4 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100 rounded-xl">إلغاء</button>
-          <button type="submit" class="px-5 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow">حفظ وإرسال التنبيه</button>
+          <button type="button" onclick="closeModal()" class="px-4 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100 rounded-xl">إلغاء</button>
+          <button type="submit" class="px-5 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow">حفظ والتفعيل</button>
         </div>
       </form>
     </div>
   </div>
 
   <script>
+    let allTasksCache = [];
+
+    function toggleReminderOptions() {
+      const type = document.getElementById('reminderTypeInput').value;
+      const container = document.getElementById('reminderOffsetContainer');
+      const offsetInput = document.getElementById('reminderOffsetInput');
+      const offsetLabel = document.getElementById('reminderOffsetLabel');
+
+      if (type === 'BEFORE') {
+        container.classList.remove('hidden');
+        offsetLabel.innerText = "التذكير قبل الموعد بـ:";
+        offsetInput.innerHTML = `
+          <option value="15">15 دقيقة</option>
+          <option value="30">30 دقيقة</option>
+          <option value="60" selected>ساعة واحدة</option>
+          <option value="120">ساعتين</option>
+          <option value="1440">يوم كامل</option>
+        `;
+      } else if (type === 'EVERY_X_HOURS') {
+        container.classList.remove('hidden');
+        offsetLabel.innerText = "إرسال تذكير كل:";
+        offsetInput.innerHTML = `
+          <option value="1">كل ساعة</option>
+          <option value="2">كل ساعتين</option>
+          <option value="4" selected>كل 4 ساعات</option>
+          <option value="6">كل 6 ساعات</option>
+          <option value="12">كل 12 ساعة</option>
+        `;
+      } else {
+        container.classList.add('hidden');
+      }
+    }
+
     async function loadTasks() {
       try {
         const res = await fetch('/api/tasks');
         const tasks = await res.json();
+        allTasksCache = tasks;
 
         const colTodo = document.getElementById('colTodo');
         const colInProgress = document.getElementById('colInProgress');
@@ -248,12 +320,21 @@
 
             ${task.description ? `<p class="text-xs text-slate-500 line-clamp-2">${task.description}</p>` : ''}
 
-            ${task.assignee ? `
-              <div class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200/60 text-[11px] text-slate-600">
-                <i class="fa-regular fa-user text-slate-400"></i>
-                <span class="font-semibold">${task.assignee.name}</span>
-              </div>
-            ` : ''}
+            <div class="flex items-center gap-2 flex-wrap">
+              ${task.assignee ? `
+                <div class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200/60 text-[11px] text-slate-600">
+                  <i class="fa-regular fa-user text-slate-400"></i>
+                  <span class="font-semibold">${task.assignee.name}</span>
+                </div>
+              ` : ''}
+
+              ${task.reminderType !== 'NONE' ? `
+                <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-semibold">
+                  <i class="fa-solid fa-bell text-[9px]"></i>
+                  <span>تذكير مفعل</span>
+                </div>
+              ` : ''}
+            </div>
 
             <div>
               <div class="flex justify-between text-[11px] font-semibold text-slate-400 mb-1">
@@ -270,8 +351,9 @@
                 <i class="fa-regular fa-clock text-[10px]"></i>
                 ${formattedDateTime}
               </span>
-              <div class="flex items-center gap-1">
-                <button onclick="updateProgress('${task.id}', ${Math.min(100, task.progress + 25)})" title="رفع نسبة الإنجاز (+25%)" class="p-1 hover:text-emerald-600 text-slate-400"><i class="fa-solid fa-plus-circle text-sm"></i></button>
+              <div class="flex items-center gap-1.5">
+                <button onclick="openEditModal('${task.id}')" title="تعديل الهدف والمواعيد" class="p-1 hover:text-blue-600 text-slate-400"><i class="fa-solid fa-pen-to-square text-sm"></i></button>
+                <button onclick="updateProgress('${task.id}', ${Math.min(100, task.progress + 25)})" title="زيادة الإنجاز (+25%)" class="p-1 hover:text-emerald-600 text-slate-400"><i class="fa-solid fa-plus-circle text-sm"></i></button>
                 <button onclick="deleteTask('${task.id}')" title="حذف المهمة" class="p-1 hover:text-rose-600 text-slate-400"><i class="fa-solid fa-trash-can text-sm"></i></button>
               </div>
             </div>
@@ -303,6 +385,87 @@
       }
     }
 
+    function openCreateModal() {
+      document.getElementById('taskForm').reset();
+      document.getElementById('taskIdInput').value = '';
+      document.getElementById('modalTitle').innerText = 'إضافة مهمة وتحديد التذكير';
+      toggleReminderOptions();
+      document.getElementById('taskModal').classList.remove('hidden');
+      document.getElementById('taskModal').classList.add('flex');
+    }
+
+    function openEditModal(taskId) {
+      const task = allTasksCache.find(t => t.id === taskId);
+      if (!task) return;
+
+      document.getElementById('taskIdInput').value = task.id;
+      document.getElementById('modalTitle').innerText = 'تعديل المهمة ومواعيد التذكير';
+      document.getElementById('taskTitleInput').value = task.title;
+      document.getElementById('taskDescInput').value = task.description || '';
+      document.getElementById('taskPriorityInput').value = task.priority;
+
+      if (task.dueDate) {
+        const d = new Date(task.dueDate);
+        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+        document.getElementById('taskDueDateInput').value = d.toISOString().slice(0, 16);
+      }
+
+      document.getElementById('taskAssigneeNameInput').value = task.assignee?.name || '';
+      document.getElementById('taskAssigneePhoneInput').value = task.assignee?.phoneNumber || '';
+
+      document.getElementById('reminderTypeInput').value = task.reminderType || 'NONE';
+      toggleReminderOptions();
+      document.getElementById('reminderOffsetInput').value = task.reminderOffset || '60';
+      document.getElementById('repeatDailyInput').checked = Boolean(task.repeatDaily);
+
+      document.getElementById('taskModal').classList.remove('hidden');
+      document.getElementById('taskModal').classList.add('flex');
+    }
+
+    function closeModal() {
+      document.getElementById('taskModal').classList.add('hidden');
+      document.getElementById('taskModal').classList.remove('flex');
+    }
+
+    async function handleFormSubmit(e) {
+      e.preventDefault();
+      const id = document.getElementById('taskIdInput').value;
+      const title = document.getElementById('taskTitleInput').value;
+      const description = document.getElementById('taskDescInput').value;
+      const priority = document.getElementById('taskPriorityInput').value;
+      const dueDate = document.getElementById('taskDueDateInput').value;
+      const assigneeName = document.getElementById('taskAssigneeNameInput').value;
+      const assigneePhone = document.getElementById('taskAssigneePhoneInput').value;
+      const reminderType = document.getElementById('reminderTypeInput').value;
+      const reminderOffset = document.getElementById('reminderOffsetInput').value;
+      const repeatDaily = document.getElementById('repeatDailyInput').checked;
+
+      const payload = {
+        title, description, priority, dueDate,
+        assigneeName, assigneePhone,
+        reminderType, reminderOffset, repeatDaily
+      };
+
+      if (id) {
+        // تعديل مهمة حالية
+        await fetch('/api/tasks/' + id, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      } else {
+        // إنشاء مهمة جديدة
+        await fetch('/api/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      }
+
+      closeModal();
+      loadTasks();
+    }
+
     async function updateProgress(id, newProgress) {
       const status = newProgress >= 100 ? 'DONE' : 'IN_PROGRESS';
       await fetch('/api/tasks/' + id, {
@@ -319,26 +482,6 @@
       loadTasks();
     }
 
-    async function handleCreateTask(e) {
-      e.preventDefault();
-      const title = document.getElementById('taskTitleInput').value;
-      const description = document.getElementById('taskDescInput').value;
-      const priority = document.getElementById('taskPriorityInput').value;
-      const dueDate = document.getElementById('taskDueDateInput').value;
-      const assigneeName = document.getElementById('taskAssigneeNameInput').value;
-      const assigneePhone = document.getElementById('taskAssigneePhoneInput').value;
-
-      await fetch('/api/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, description, priority, dueDate, assigneeName, assigneePhone })
-      });
-
-      closeAddTaskModal();
-      document.getElementById('createTaskForm').reset();
-      loadTasks();
-    }
-
     async function disconnectWhatsApp() {
       if (!confirm('هل تريد إنهاء جلسة الواتساب الحالية ومسح كود جديد؟')) return;
       try {
@@ -347,16 +490,6 @@
       } catch (e) {
         alert('حدث خطأ أثناء إنهاء الاتصال.');
       }
-    }
-
-    function openAddTaskModal() {
-      document.getElementById('taskModal').classList.remove('hidden');
-      document.getElementById('taskModal').classList.add('flex');
-    }
-
-    function closeAddTaskModal() {
-      document.getElementById('taskModal').classList.add('hidden');
-      document.getElementById('taskModal').classList.remove('flex');
     }
 
     loadTasks();
