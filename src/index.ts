@@ -91,22 +91,53 @@ async function runReminderEngine() {
       }
 
       if (shouldSend) {
-        const recipient = task.assignee?.phoneNumber || process.env.OWNER_PHONE;
-        if (recipient) {
-          const reminderMsg = `⏰ *تنبيه موعد مهمة من السكرتير التنفيذي:*\n\n` +
-            `🔹 *المهمة:* ${task.title}\n` +
-            `📝 *التفاصيل:* ${task.description || 'لا توجد ملاحظات'}\n` +
-            `⏳ *موعد التسليم:* ${new Date(task.dueDate).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' })}\n` +
-            `📊 *نسبة الإنجاز الحالية:* ${task.progress}%\n\n` +
-            `يرجى المتابعة وتحديث نسبة الإنجاز فور الانتهاء.`;
+        // استخراج الوقت المنسق بتوقيت سلطنة عُمان (UTC+4)
+        const timeFormatted = new Intl.DateTimeFormat('ar-EG', {
+          timeZone: 'Asia/Muscat',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        }).format(new Date(task.dueDate));
 
-          await whatsappService.sendMessage(recipient, reminderMsg);
-          await prisma.task.update({
-            where: { id: task.id },
-            data: { lastReminderSent: now },
-          });
-          console.log(`🔔 تم إرسال تنبيه للمهمة [${task.title}] إلى [${recipient}]`);
+        // تحديد ما إذا كان الموعد اليوم أو غداً بتوقيت عُمان
+        const nowOman = new Date(now.getTime() + 4 * 3600000);
+        const taskOman = new Date(task.dueDate.getTime() + 4 * 3600000);
+        const isToday = nowOman.getUTCDate() === taskOman.getUTCDate();
+        const dayText = isToday ? 'اليوم' : 'غداً';
+
+        // 1. إذا كانت المهمة موجهة لشخص مكلّف (مثل صفية)
+        if (task.assignee && task.assignee.phoneNumber) {
+          // تحويل صيغة الغائب (صفية تتصل بي) إلى صيغة مباشرة ولبقة
+          let actionText = task.title
+            .replace(/^[^\s]+\s+(?:تتصل|يتصل)\s+بي/i, 'اتصل بي')
+            .replace(/^(?:تتصل|يتصل)\s+بي/i, 'اتصل بي')
+            .trim();
+
+          if (!actionText || actionText.length < 3) {
+            actionText = 'اتصل بي';
+          }
+
+          // الصيغة الطبيعية والمختصرة من حسابك الشخصي
+          const assigneeMsg = `مرحباً،\nلطفاً ${actionText} ${dayText} الساعة ${timeFormatted}.`;
+
+          await whatsappService.sendMessage(task.assignee.phoneNumber, assigneeMsg);
+          console.log(`🔔 تم إرسال رسالة التذكير إلى المكلف [${task.assignee.name}] (${task.assignee.phoneNumber})`);
+        } 
+        // 2. إذا كانت المهمة تذكيراً شخصياً لك
+        else {
+          const ownerPhone = process.env.OWNER_PHONE;
+          if (ownerPhone) {
+            const ownerMsg = `⏰ تذكير بموعد: ${task.title} (${dayText} الساعة ${timeFormatted}).`;
+            await whatsappService.sendMessage(ownerPhone, ownerMsg);
+            console.log(`🔔 تم إرسال تذكير الموعد الشخصي إلى حسابك`);
+          }
         }
+
+        // تسجيل تاريخ إرسال التنبيه لمنع تكراره
+        await prisma.task.update({
+          where: { id: task.id },
+          data: { lastReminderSent: now },
+        });
       }
     }
   } catch (err) {
