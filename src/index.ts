@@ -14,8 +14,18 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
+// مسارات الـ API
 app.use('/api', apiRoutes);
 
+// مسار لجلب حالة الواتساب الحقيقية مع رمز QR إن وجد
+app.get('/api/whatsapp/status', (req: Request, res: Response) => {
+  res.json({
+    isConnected: whatsappService.isConnected,
+    qrCode: whatsappService.qrCodeDataUrl,
+  });
+});
+
+// إنهاء الجلسة يدوياً
 app.post('/api/whatsapp/logout', async (req: Request, res: Response) => {
   try {
     await whatsappService.logout();
@@ -28,46 +38,17 @@ app.post('/api/whatsapp/logout', async (req: Request, res: Response) => {
 app.use(express.static(path.join(process.cwd(), 'public')));
 
 app.get('/', (req: Request, res: Response) => {
-  if (whatsappService.isConnected) {
-    return res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
-  }
-
-  if (whatsappService.qrCodeDataUrl) {
-    return res.send(`
-      <!DOCTYPE html>
-      <html dir="rtl" lang="ar">
-      <head>
-        <meta charset="utf-8">
-        <meta http-equiv="refresh" content="15">
-        <title>ربط الواتساب</title>
-        <style>
-          body { font-family: system-ui, sans-serif; background: #F8FAFC; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-          .card { background: white; padding: 35px; border-radius: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); text-align: center; max-width: 420px; }
-          h2 { color: #0F172A; margin-bottom: 8px; font-size: 20px; font-weight: 700; }
-          p { color: #64748B; font-size: 13px; line-height: 1.6; margin-bottom: 20px; }
-          img { border-radius: 16px; border: 1px solid #E2E8F0; padding: 8px; }
-        </style>
-      </head>
-      <body>
-        <div class="card">
-          <h2>امسح الرمز لربط المساعد الذكي</h2>
-          <p>افتح واتساب في هاتفك > الأجهزة المرتبطة > ربط جهاز، ثم وجّه الكاميرا نحو الرمز التالي:</p>
-          <img src="${whatsappService.qrCodeDataUrl}" alt="WhatsApp QR Code" width="270" height="270" />
-        </div>
-      </body>
-      </html>
-    `);
-  }
-
-  return res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
+  res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
 });
 
-// محرك فحص وإرسال التذكيرات التلقائية عبر واتساب كل 60 ثانية
+// محرك فحص وإرسال التذكيرات التلقائية (يعمل كل 30 ثانية)
 async function runReminderEngine() {
   if (!whatsappService.isConnected) return;
 
   try {
     const now = new Date();
+    const currentTime = now.getTime();
+
     // جلب المهام غير المكتملة التي لها موعد محدد ونظام تذكير
     const tasks = await prisma.task.findMany({
       where: {
@@ -81,31 +62,30 @@ async function runReminderEngine() {
 
     for (const task of tasks) {
       if (!task.dueDate) continue;
+
       const dueTime = new Date(task.dueDate).getTime();
-      const currentTime = now.getTime();
       let shouldSend = false;
 
-      // 1. تذكير في نفس الوقت المحدد
+      // 1. تذكير في نفس وقت الاستحقاق
       if (task.reminderType === 'EXACT') {
-        const diffMinutes = Math.abs(currentTime - dueTime) / (1000 * 60);
-        if (diffMinutes <= 2 && (!task.lastReminderSent || (currentTime - new Date(task.lastReminderSent).getTime()) > 3600000)) {
+        if (currentTime >= dueTime && !task.lastReminderSent) {
           shouldSend = true;
         }
       }
 
-      // 2. تذكير قبل الموعد بمدة معينة (بالدقائق)
+      // 2. تذكير قبل الموعد بمدة معينة
       if (task.reminderType === 'BEFORE') {
         const targetTime = dueTime - (task.reminderOffset * 60 * 1000);
-        const diffMinutes = Math.abs(currentTime - targetTime) / (1000 * 60);
-        if (diffMinutes <= 2 && (!task.lastReminderSent || (currentTime - new Date(task.lastReminderSent).getTime()) > 3600000)) {
+        if (currentTime >= targetTime && !task.lastReminderSent) {
           shouldSend = true;
         }
       }
 
-      // 3. تذكير كل عدد من الساعات
+      // 3. تكرار دوري كل عدد من الساعات
       if (task.reminderType === 'EVERY_X_HOURS') {
         const hoursIntervalMs = task.reminderOffset * 60 * 60 * 1000;
-        if (!task.lastReminderSent || (currentTime - new Date(task.lastReminderSent).getTime()) >= hoursIntervalMs) {
+        const lastSent = task.lastReminderSent ? new Date(task.lastReminderSent).getTime() : 0;
+        if ((currentTime - lastSent) >= hoursIntervalMs) {
           shouldSend = true;
         }
       }
@@ -113,23 +93,24 @@ async function runReminderEngine() {
       if (shouldSend) {
         const recipient = task.assignee?.phoneNumber || process.env.OWNER_PHONE;
         if (recipient) {
-          const reminderMsg = `⏰ *تذكير من السكرتير التنفيذي:*\n\n` +
+          const reminderMsg = `⏰ *تنبيه موعد مهمة من السكرتير التنفيذي:*\n\n` +
             `🔹 *المهمة:* ${task.title}\n` +
             `📝 *التفاصيل:* ${task.description || 'لا توجد ملاحظات'}\n` +
             `⏳ *موعد التسليم:* ${new Date(task.dueDate).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' })}\n` +
-            `📊 *نسبة الإنجاز الحالية:* ${task.progress}%`;
+            `📊 *نسبة الإنجاز الحالية:* ${task.progress}%\n\n` +
+            `يرجى المتابعة وتحديث نسبة الإنجاز فور الانتهاء.`;
 
           await whatsappService.sendMessage(recipient, reminderMsg);
           await prisma.task.update({
             where: { id: task.id },
             data: { lastReminderSent: now },
           });
-          console.log(`🔔 تم إرسال تذكير بالمهمة [${task.title}] إلى [${recipient}]`);
+          console.log(`🔔 تم إرسال تنبيه للمهمة [${task.title}] إلى [${recipient}]`);
         }
       }
     }
   } catch (err) {
-    console.error('خطأ في محرك التذكيرات:', err);
+    console.error('خطأ في محرك التذكير:', err);
   }
 }
 
@@ -138,8 +119,7 @@ app.listen(PORT, async () => {
   try {
     console.log('🔄 جاري تشغيل ومزامنة خدمة واتساب...');
     await whatsappService.init();
-    // تشغيل محرك التذكيرات كل دقيقة
-    setInterval(runReminderEngine, 60000);
+    setInterval(runReminderEngine, 30000); // فحص دوري كل 30 ثانية
   } catch (error) {
     console.error('❌ حدث خطأ أثناء تشغيل خدمة واتساب:', error);
   }
