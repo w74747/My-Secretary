@@ -6,10 +6,10 @@ const ai = new OpenAI({
   baseURL: 'https://api.together.xyz/v1',
 });
 
+// النماذج السحابية النشطة حالياً
 const SERVERLESS_MODELS = [
   'meta-llama/Llama-3.3-70B-Instruct-Turbo',
   'mistralai/Mixtral-8x7B-Instruct-v0.1',
-  'meta-llama/Meta-Llama-3-70B-Instruct-Turbo',
 ];
 
 const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
@@ -29,7 +29,7 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
             enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'],
             description: 'درجة الأهمية (افتراضي MEDIUM)',
           },
-          assigneeName: { type: 'string', description: 'اسم الشخص المكلف بالمهمة (مثال: صفية، أحمد)' },
+          assigneeName: { type: 'string', description: 'اسم الشخص المكلف بالمهمة' },
           assigneePhone: { type: 'string', description: 'رقم هاتف الشخص المكلف بالكامل' },
           reminderType: {
             type: 'string',
@@ -90,15 +90,15 @@ export async function processUserMessage(senderJid: string, userMessage: string)
   tomorrowDate.setDate(tomorrowDate.getDate() + 1);
   const tomorrowStr = tomorrowDate.toISOString().split('T')[0];
 
-  // 1. معالج محلي فوري ودقيق للأوامر وتكليف الأشخاص
-  const isCreationIntent = /^(مهمه|مهمة|ذكر|ذَكِّر|ذكرني|سجل|أضف|اضف|كلف|كلّف|أخبر|اخبر)/i.test(cleanMessage);
+  // 1. معالج فوري لجميع صيغ التكليف والتبليغ في اللهجة العربية
+  const isCreationIntent = /(?:مهمه|مهمة|ذكر|ذَكِّر|ذكرني|سجل|أضف|اضف|كلف|كلّف|بلغ|بلّغ|أخبر|اخبر|خبر|قل لـ?|قول لـ?|خلي|خلّي|وصي|وصّي|ارسل لـ?|أرسل لـ?)/i.test(cleanMessage);
+  
   if (isCreationIntent) {
-    // أ. استخراج رقم الهاتف بالكامل بدقة متناهية (سواء كتب مع 968 أو بدونها)
-    const phoneMatch = cleanMessage.match(/(?:رقمها|رقمه|رقم|هاتفها|هاتف|جوال|واتساب)?\s*[:=]?\s*(\+?\d{8,15})/i);
+    // أ. استخراج رقم الهاتف بالكامل أينما ورد في الرسالة
     let assigneePhone: string | null = null;
+    const phoneMatch = cleanMessage.match(/(?:\+?968)?\s*([79]\d{7}|\d{8,15})\b/);
     if (phoneMatch) {
-      const rawDigits = phoneMatch[1].replace(/\D/g, '');
-      // إذا كان الرقم عُماني مكون من 8 أرقام يبدأ بـ 7 أو 9، نضيف له مفتاح الدولة تلقائياً
+      const rawDigits = phoneMatch[0].replace(/\D/g, '');
       if (rawDigits.length === 8 && (rawDigits.startsWith('7') || rawDigits.startsWith('9'))) {
         assigneePhone = '968' + rawDigits;
       } else {
@@ -107,20 +107,26 @@ export async function processUserMessage(senderJid: string, userMessage: string)
     }
 
     // ب. استخراج اسم الشخص المكلف
-    const assigneeMatch = cleanMessage.match(/(?:ذكر|ذَكِّر|كلف|كلّف|أخبر|اخبر|مهمة لـ?|مهمه لـ?|اتصال بـ?|تتصل بـ?)\s+([^\s\n،,:]+)/i);
+    const assigneeMatch = cleanMessage.match(/(?:ذكر|ذَكِّر|كلف|كلّف|بلغ|بلّغ|أخبر|اخبر|خبر|خلي|خلّي|قل لـ?|قول لـ?|وصي|وصّي|مهمة لـ?|مهمه لـ?)\s+([^\s\n،,:]+)/i);
     let assigneeName: string | null = null;
-    if (assigneeMatch && !['لي', 'ليوم', 'نفسي', 'بكره', 'اليوم', 'موعد', 'الساعه', 'الساعة', 'بي'].includes(assigneeMatch[1])) {
-      assigneeName = assigneeMatch[1].trim();
+    if (assigneeMatch) {
+      let cand = assigneeMatch[1].trim();
+      if (!['لي', 'ليوم', 'نفسي', 'بكره', 'اليوم', 'موعد', 'الساعه', 'الساعة', 'بي', 'انه', 'أنها', 'انها'].includes(cand)) {
+        if (cand.startsWith('ل') && cand.length > 2) {
+          cand = cand.substring(1);
+        }
+        assigneeName = cand;
+      }
     }
 
-    // ج. تحديد اليوم (اليوم أو غداً)
+    // ج. تحديد تاريخ الموعد (اليوم أم غداً)
     const isToday = cleanMessage.includes('اليوم');
     const targetDayObj = isToday ? new Date(localTime) : new Date(tomorrowDate);
 
-    // د. استخراج الوقت بدقة (الساعات والدقائق)
+    // د. استخراج وقت الموعد (الساعات والدقائق)
     let targetHour = 9;
     let targetMinute = 0;
-    const isEvening = /مساء|مساءً|بالليل|عصر|عصراً|ظهر|ظهراً/i.test(cleanMessage);
+    const isEvening = /(?:مساء|مساءً|بالليل|عصر|عصراً|ظهر|ظهراً)/i.test(cleanMessage);
 
     const timeExplicit = cleanMessage.match(/(\d{1,2})(?::(\d{2}))?/);
     if (timeExplicit) {
@@ -139,7 +145,7 @@ export async function processUserMessage(senderJid: string, userMessage: string)
       targetMinute = m;
     }
 
-    // تحويل وقت عُمان إلى UTC بطرح 4 ساعات
+    // تحويل وقت عُمان إلى UTC بطرح 4 ساعات لحفظه بالدقة العالمية
     const taskDateUtc = new Date(Date.UTC(
       targetDayObj.getFullYear(),
       targetDayObj.getMonth(),
@@ -149,16 +155,14 @@ export async function processUserMessage(senderJid: string, userMessage: string)
       0
     ));
 
-    // هـ. تنظيف عنوان المهمة بأمان وبدون حذف حروف أصلية من الكلمات
-    // إزالة جزء الرقم أولاً
-    let textWithoutPhone = cleanMessage.replace(/(?:هذا\s+)?(?:رقمها|رقمه|رقم|هاتفها|هاتف|جوال)?\s*[:=]?\s*\+?\d{8,15}/gi, '').trim();
+    // هـ. تنظيف عنوان المهمة بذكاء وبدون إتلاف الكلمات
+    let textNoPhone = cleanMessage.replace(/(?:هذا\s+)?(?:رقم|هاتف|جوال)?(?:\s+[^\s\n]+)?\s*[:=]?\s*\+?\d{8,15}/gi, '').trim();
+    let cleanTitle = textNoPhone.replace(/^(?:مهمه لبكره|مهمة لبكرة|مهمه|مهمة|ذكرني|سجل موعد|سجل لي موعد|سجل|ذكر|ذَكِّر|كلف|كلّف|بلغ|بلّغ|أخبر|اخبر|خبر|خلي|خلّي)\s*/i, '').trim();
 
-    // إزالة الكلمات الافتتاحية
-    let cleanTitle = textWithoutPhone
-      .replace(/^(?:مهمه لبكره|مهمة لبكرة|مهمه|مهمة|ذكرني|سجل موعد|سجل لي موعد|سجل|ذكر|ذَكِّر|كلف|كلّف)\s*/i, '')
-      .trim();
+    if (assigneeName && cleanTitle.startsWith(assigneeName)) {
+      cleanTitle = cleanTitle.substring(assigneeName.length).trim();
+    }
 
-    // إزالة عبارات التوقيت فقط ككلمات كاملة
     cleanTitle = cleanTitle
       .replace(/\b(?:اليوم|بكره|غدا|غداً)\b/gi, '')
       .replace(/الساع[ةه]\s*\d{1,2}(?::\d{2})?\s*(?:صباحاً|صباحا|مساءً|مساء|ونص|وربع)?/gi, '')
@@ -245,14 +249,11 @@ export async function processUserMessage(senderJid: string, userMessage: string)
 المهام الحالية المسجلة بالنظام: ${JSON.stringify(activeTasks)}.
 
 القواعد:
-1. عند طلب إضافة أو جدولة مهمة أو تذكير شخص آخر (مثل: "ذكر فلان"، "كلف فلان"):
+1. عند طلب إضافة أو جدولة مهمة أو تبليغ/تكليف شخص آخر (مثل: "بلغ فلان"، "كلف فلان"):
    - استدعِ دالة create_task فوراً مع تمرير assigneeName و assigneePhone بالكامل إن وجدا.
    - احسب dueDate بصيغة UTC (طرح 4 ساعات من توقيت عمان).
-2. عند السؤال عن المهام (مثل: "ايش عندي اليوم"):
-   - استدعِ دالة get_tasks_by_date.
-3. عند الإبلاغ عن الإنجاز:
-   - استدعِ update_task_status بنسبة 100 وحالة DONE.
-4. تحدث بلهجة عربية خليجية مهذبة ومباشرة ("أبشر طال عمرك"، "تم تسجيل الموعد") وتجنب كلمة "يا فندم".
+2. عند السؤال عن المهام: استدعِ get_tasks_by_date.
+3. تحدث بلهجة عربية خليجية مهذبة ومباشرة وتجنب كلمة "يا فندم".
 `;
 
   const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
@@ -260,26 +261,24 @@ export async function processUserMessage(senderJid: string, userMessage: string)
     { role: 'user', content: userMessage },
   ];
 
-  async function executeCompletion() {
-    let lastErr: any = null;
+  try {
+    let response;
     for (const model of SERVERLESS_MODELS) {
       try {
-        return await ai.chat.completions.create({
+        response = await ai.chat.completions.create({
           model,
           messages,
           tools,
           tool_choice: 'auto',
         });
+        if (response) break;
       } catch (err: any) {
-        lastErr = err;
-        console.warn(`النموذج ${model} واجه خطأ، جاري تجربة البديل...`);
+        console.warn(`النموذج ${model} واجه خطأ...`);
       }
     }
-    throw lastErr;
-  }
 
-  try {
-    const response = await executeCompletion();
+    if (!response) throw new Error('تعذر معالجة الطلب بالذكاء الاصطناعي');
+
     const responseMessage = response.choices[0].message;
 
     if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
@@ -390,15 +389,12 @@ export async function processUserMessage(senderJid: string, userMessage: string)
       const followUpResponse = await ai.chat.completions.create({
         model: SERVERLESS_MODELS[0],
         messages: followUpMessages,
-      }).catch(() => ai.chat.completions.create({
-        model: SERVERLESS_MODELS[1],
-        messages: followUpMessages,
-      }));
+      });
 
-      return followUpResponse.choices[0].message.content || 'أبشر طال عمرك، تم تنفيذ الأمر وتسجيله في جدولك بنجاح.';
+      return followUpResponse.choices[0].message.content || 'أبشر طال عمرك، تم تسجيل المهمة بنجاح.';
     }
 
-    return responseMessage.content || 'أهلاً بك طال عمرك، معك سكرتيرك التنفيذي. كيف أستطيع خدمتك اليوم؟';
+    return responseMessage.content || 'أهلاً بك طال عمرك، كيف أستطيع خدمتك اليوم؟';
   } catch (error) {
     console.error('خطأ الذكاء الاصطناعي النهائي:', error);
     return 'أهلاً بك، تم استلام رسالتك وحفظها بنجاح في جدول الأعمال.';
