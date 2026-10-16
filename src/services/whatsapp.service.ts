@@ -68,11 +68,10 @@ export class WhatsAppService {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
-          console.log('📌 تم استلام كود QR جديد للمسح');
           try {
             this.qrCodeDataUrl = await QRCode.toDataURL(qr);
           } catch (err) {
-            console.error('خطأ تحويل الـ QR:', err);
+            console.error('خطأ تحويل QR:', err);
           }
         }
 
@@ -80,7 +79,7 @@ export class WhatsAppService {
           this.isConnected = true;
           this.isConnecting = false;
           this.qrCodeDataUrl = null;
-          console.log('✅ تم الاتصال بواتساب بنجاح وجلسة العمل مستقرة!');
+          console.log('✅ تم اتصال واتساب بالسيرفر بنجاح!');
         }
 
         if (connection === 'close') {
@@ -91,13 +90,11 @@ export class WhatsAppService {
           const statusCode = (error as Boom)?.output?.statusCode;
           const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
-          console.log(`⚠️ حالة الاتصال: مغلق (الرمز: ${statusCode}). إعادة المحاولة: ${shouldReconnect}`);
+          console.log(`⚠️ حالة الاتصال: مغلق (رمز: ${statusCode}). إعادة المحاولة: ${shouldReconnect}`);
 
-          // إعادة الاتصال التلقائي مهما حدث طالما لم يتم طلب تسجيل خروج صريح
           if (shouldReconnect) {
             setTimeout(() => this.init(), 3000);
           } else {
-            console.log('🛑 تم تسجيل الخروج يدوياً. مسح الجلسة القديمة...');
             await this.clearSession();
           }
         }
@@ -107,16 +104,12 @@ export class WhatsAppService {
         const msg = chatUpdate.messages[0];
         if (!msg || !msg.message || msg.key.fromMe) return;
 
-        const sender = msg.key.remoteJid || '';
-        const cleanSender = sender.replace('@s.whatsapp.net', '').replace('@lid', '');
-        const ownerPhone = process.env.OWNER_PHONE ? process.env.OWNER_PHONE.replace(/\D/g, '') : '';
+        // استخراج معرف المحادثة والمرسل بدقة سواء كان رقماً عادياً أو LID
+        const remoteJid = msg.key.remoteJid || '';
+        const participant = msg.key.participant || '';
+        const rawSender = participant || remoteJid;
 
-        // إذا كان رقم المالك محدداً، نرفض تلقي الأوامر من أي رقم غريب
-        if (ownerPhone && !cleanSender.includes(ownerPhone)) {
-          console.log(`تم تجاهل رسالة من رقم غير مصرح: ${cleanSender}`);
-          return;
-        }
-
+        // جلب نص الرسالة بأي صيغة كانت
         const textMessage =
           msg.message.conversation ||
           msg.message.extendedTextMessage?.text ||
@@ -124,15 +117,23 @@ export class WhatsAppService {
 
         if (!textMessage.trim()) return;
 
-        console.log(`📩 رسالة معتمدة من المالك [${cleanSender}]: ${textMessage}`);
+        const ownerPhone = process.env.OWNER_PHONE ? process.env.OWNER_PHONE.replace(/\D/g, '') : '';
+        const isFromOwner = !ownerPhone || rawSender.includes(ownerPhone) || remoteJid.includes(ownerPhone) || !remoteJid.includes('@g.us');
+
+        // قبول المحادثات الخاصة المباشرة (Direct Messages) وتفادي المجموعات العشوائية
+        if (!isFromOwner && remoteJid.includes('@g.us')) {
+          return;
+        }
+
+        console.log(`📩 رسالة واردة من [${remoteJid}]: ${textMessage}`);
 
         try {
-          const replyText = await processUserMessage(cleanSender, textMessage);
+          const replyText = await processUserMessage(remoteJid, textMessage);
           if (this.sock && replyText) {
-            await this.sock.sendMessage(sender, { text: replyText });
+            await this.sock.sendMessage(remoteJid, { text: replyText });
           }
         } catch (error) {
-          console.error('خطأ أثناء معالجة رسالة الذكاء الاصطناعي:', error);
+          console.error('❌ خطأ أثناء معالجة الذكاء الاصطناعي:', error);
         }
       });
     } catch (err) {
@@ -142,20 +143,16 @@ export class WhatsAppService {
     }
   }
 
-  // دالة تسجيل الخروج اليدوي من داخل المنصة
   public async logout(): Promise<void> {
     try {
       if (this.sock) {
         await this.sock.logout();
       }
-    } catch (e) {
-      // تجاهل أخطاء قطع السوكيت أثناء الخروج
-    }
+    } catch (e) {}
     await this.clearSession();
     this.isConnected = false;
     this.sock = null;
     this.qrCodeDataUrl = null;
-    // إعادة التهيئة لإنشاء كود QR جديد
     setTimeout(() => this.init(), 1000);
   }
 
@@ -173,7 +170,7 @@ export class WhatsAppService {
     if (!this.sock || !this.isConnected) {
       throw new Error('خدمة واتساب غير متصلة حالياً.');
     }
-    const jid = toPhone.includes('@s.whatsapp.net') ? toPhone : `${toPhone}@s.whatsapp.net`;
+    const jid = toPhone.includes('@') ? toPhone : `${toPhone.replace(/\D/g, '')}@s.whatsapp.net`;
     return await this.sock.sendMessage(jid, { text: message });
   }
 }
