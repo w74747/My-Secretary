@@ -3,6 +3,7 @@ dotenv.config();
 
 import express, { Request, Response } from 'express';
 import cors from 'cors';
+import path from 'path';
 import apiRoutes from './routes/api.routes';
 import { whatsappService } from './services/whatsapp.service';
 
@@ -12,34 +13,16 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// مسارات الـ API للوحة التحكم والمهام
+// مسارات الـ API
 app.use('/api', apiRoutes);
 
-// الصفحة الرئيسية لعرض رمز QR وحالة الاتصال في المتصفح
+// خدمة ملفات المنصة ولوحة التحكم مباشرة
+app.use(express.static(path.join(process.cwd(), 'public')));
+
+// الصفحة الرئيسية: تعرض لوحة التحكم مباشرة إذا كان الواتساب متصلاً، أو تعرض رمز QR إذا تطلب الأمر
 app.get('/', (req: Request, res: Response) => {
   if (whatsappService.isConnected) {
-    return res.send(`
-      <!DOCTYPE html>
-      <html dir="rtl" lang="ar">
-      <head>
-        <meta charset="utf-8">
-        <title>حالة السكرتير الذكي</title>
-        <style>
-          body { font-family: system-ui, sans-serif; background: #F8FAFC; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-          .card { background: white; padding: 40px; border-radius: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); text-align: center; max-width: 400px; }
-          .status { display: inline-block; width: 12px; height: 12px; background: #10B981; border-radius: 50%; margin-left: 8px; }
-          h2 { color: #0F172A; margin-bottom: 8px; }
-          p { color: #64748B; font-size: 14px; }
-        </style>
-      </head>
-      <body>
-        <div class="card">
-          <h2><span class="status"></span>الواتساب متصل بنجاح</h2>
-          <p>المساعد الذكي يعمل الآن وجاهز لمتابعة المهام وتحديث اللوحة.</p>
-        </div>
-      </body>
-      </html>
-    `);
+    return res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
   }
 
   if (whatsappService.qrCodeDataUrl) {
@@ -69,28 +52,10 @@ app.get('/', (req: Request, res: Response) => {
     `);
   }
 
-  return res.send(`
-    <!DOCTYPE html>
-    <html dir="rtl" lang="ar">
-    <head>
-      <meta charset="utf-8">
-      <meta http-equiv="refresh" content="3">
-      <title>جاري التهيئة...</title>
-      <style>
-        body { font-family: system-ui, sans-serif; background: #F8FAFC; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        .card { background: white; padding: 35px; border-radius: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); text-align: center; }
-        p { color: #64748B; font-size: 14px; }
-      </style>
-    </head>
-    <body>
-      <div class="card">
-        <p>🔄 جاري تهيئة الاتصال بواتساب وتوليد رمز الـ QR...</p>
-      </div>
-    </body>
-    </html>
-  `);
+  return res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
 });
 
+// فحص صحة الخادم
 app.get('/health', (req: Request, res: Response) => {
   res.json({
     status: 'ok',
