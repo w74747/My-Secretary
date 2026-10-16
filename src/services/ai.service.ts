@@ -6,7 +6,6 @@ const ai = new OpenAI({
   baseURL: 'https://api.together.xyz/v1',
 });
 
-// النماذج السحابية الرسمية المعتمدة على Together.ai
 const SERVERLESS_MODELS = [
   'meta-llama/Llama-3.3-70B-Instruct-Turbo',
   'mistralai/Mixtral-8x7B-Instruct-v0.1',
@@ -18,7 +17,7 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'create_task',
-      description: 'إنشاء وحفظ مهمة أو موعد جديد في جدول المهام',
+      description: 'إنشاء وحفظ مهمة أو موعد جديد في جدول المهام وتكليف شخص بها إن وجد',
       parameters: {
         type: 'object',
         properties: {
@@ -30,8 +29,8 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
             enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'],
             description: 'درجة الأهمية (افتراضي MEDIUM)',
           },
-          assigneeName: { type: 'string', description: 'اسم الشخص المكلف إن وجد' },
-          assigneePhone: { type: 'string', description: 'رقم هاتف المكلف إن وجد' },
+          assigneeName: { type: 'string', description: 'اسم الشخص المكلف بالمهمة (مثال: صفية، أحمد)' },
+          assigneePhone: { type: 'string', description: 'رقم هاتف الشخص المكلف (مثال: 96890683222)' },
           reminderType: {
             type: 'string',
             enum: ['NONE', 'EXACT', 'BEFORE', 'EVERY_X_HOURS'],
@@ -83,7 +82,7 @@ export async function processUserMessage(senderJid: string, userMessage: string)
 
   // حساب التوقيت المحلي لسلطنة عُمان (UTC+4)
   const now = new Date();
-  const omanOffsetMinutes = 4 * 60; // 4 ساعات
+  const omanOffsetMinutes = 4 * 60;
   const localTime = new Date(now.getTime() + (omanOffsetMinutes + now.getTimezoneOffset()) * 60000);
   const todayStr = localTime.toISOString().split('T')[0];
 
@@ -91,70 +90,126 @@ export async function processUserMessage(senderJid: string, userMessage: string)
   tomorrowDate.setDate(tomorrowDate.getDate() + 1);
   const tomorrowStr = tomorrowDate.toISOString().split('T')[0];
 
-  // 1. مسار المعالجة السريعة المباشرة للأوامر الصريحة مع تصحيح فارق التوقيت
-  const isCreationIntent = /^(مهمه|مهمة|ذكرني|سجل|أضف|اضف)/i.test(cleanMessage);
+  // 1. معالج محلي فوري للأوامر وتكليف الأشخاص
+  const isCreationIntent = /^(مهمه|مهمة|ذكر|ذَكِّر|ذكرني|سجل|أضف|اضف|كلف|كلّف|أخبر|اخبر)/i.test(cleanMessage);
   if (isCreationIntent) {
+    // أ. استخراج رقم الهاتف إن وجد
+    const phoneMatch = cleanMessage.match(/(?:\+?968)?\s*([79]\d{7}|[0-9]{8,14})/);
+    const assigneePhone = phoneMatch ? phoneMatch[0].replace(/\D/g, '') : null;
+
+    // ب. استخراج اسم الشخص المكلف
+    const assigneeMatch = cleanMessage.match(/(?:ذكر|ذَكِّر|كلف|كلّف|أخبر|اخبر|مهمة لـ?|مهمه لـ?)\s+([^\s\n،,]+)/i);
+    let assigneeName: string | null = null;
+    if (assigneeMatch && !['لي', 'ليوم', 'نفسي', 'بكره', 'اليوم', 'موعد'].includes(assigneeMatch[1])) {
+      assigneeName = assigneeMatch[1].trim();
+    }
+
+    // ج. تحديد اليوم (اليوم أو غداً)
+    const isToday = cleanMessage.includes('اليوم');
+    const targetDayObj = isToday ? new Date(localTime) : new Date(tomorrowDate);
+
+    // د. استخراج الوقت بدقة (ساعات ودقائق ومساء/صباحاً)
     let targetHour = 9;
-    let targetMinute = 30;
+    let targetMinute = 0;
+    const isEvening = /مساء|مساءً|م|بالليل|عصر|عصراً|ظهر|ظهراً/i.test(cleanMessage);
 
-    // استخراج التوقيت المذكور بالرسالة بدقة
-    if (cleanMessage.includes('10')) { targetHour = 10; targetMinute = 0; }
-    else if (cleanMessage.includes('11')) { targetHour = 11; targetMinute = 0; }
-    else if (cleanMessage.includes('12')) { targetHour = 12; targetMinute = 0; }
-    else if (cleanMessage.includes('1') || cleanMessage.includes('الواحدة')) { targetHour = 13; targetMinute = 0; }
-    else if (cleanMessage.includes('9 ونص') || cleanMessage.includes('9:30')) { targetHour = 9; targetMinute = 30; }
-    else if (cleanMessage.includes('8 ونص') || cleanMessage.includes('8:30')) { targetHour = 8; targetMinute = 30; }
+    const timeExplicit = cleanMessage.match(/(\d{1,2})(?::(\d{2}))?/);
+    if (timeExplicit) {
+      let h = parseInt(timeExplicit[1], 10);
+      let m = timeExplicit[2] ? parseInt(timeExplicit[2], 10) : 0;
+      
+      if (cleanMessage.includes('ونص')) m = 30;
+      if (cleanMessage.includes('وربع')) m = 15;
 
-    // تحويل الوقت من توقيت عمان (UTC+4) إلى UTC بطرح 4 ساعات عند الحفظ في قاعدة البيانات
+      if (isEvening && h < 12) {
+        h += 12;
+      } else if (!isEvening && cleanMessage.includes('صباح') && h === 12) {
+        h = 0;
+      }
+      targetHour = h;
+      targetMinute = m;
+    }
+
+    // تحويل وقت عُمان إلى UTC بطرح 4 ساعات
     const taskDateUtc = new Date(Date.UTC(
-      tomorrowDate.getFullYear(),
-      tomorrowDate.getMonth(),
-      tomorrowDate.getDate(),
+      targetDayObj.getFullYear(),
+      targetDayObj.getMonth(),
+      targetDayObj.getDate(),
       targetHour - 4,
       targetMinute,
       0
     ));
 
-    // استخراج عنوان مهني ومختصر بإزالة الكلمات التمهيدية
+    // هـ. تنظيف عنوان المهمة
     let cleanTitle = cleanMessage
-      .replace(/^(مهمه لبكره|مهمة لبكرة|مهمه|مهمة|ذكرني|سجل موعد|سجل لي موعد|سجل)\s*/i, '')
-      .replace(/(\d{1,2}(?::\d{2})?\s*(?:صباحا|صباحاً|مساء|مساءً|ونص|وربع)?)/gi, '')
+      .replace(/^(مهمه لبكره|مهمة لبكرة|مهمه|مهمة|ذكرني|سجل موعد|سجل لي موعد|سجل|ذكر|ذَكِّر|كلف|كلّف)\s*/i, '')
+      .replace(/(?:اليوم|بكره|غدا|غداً|الساعه|الساعة|\d{1,2}(?::\d{2})?|صباحا|صباحاً|مساء|مساءً|م|ص|ونص|وربع)/gi, '')
+      .replace(/(?:هذا رقمها|هذا رقمه|رقمها|رقمه|رقم|هاتف)\s*:?\s*[\d\+]+/gi, '')
       .split('ذكرني')[0]
       .replace(/^[\s,،-]+/, '')
       .trim();
 
     if (!cleanTitle || cleanTitle.length < 3) {
-      cleanTitle = 'موعد ومناقشة أعمال';
+      cleanTitle = assigneeName ? `مهمة لـ ${assigneeName}` : 'موعد ومتابعة أعمال';
     }
-
-    // اقتصار العنوان على 70 حرفاً ليكون منسقاً باللوحة
     cleanTitle = cleanTitle.slice(0, 70);
 
-    const reminderOffset = cleanMessage.includes('نصف ساعه') || cleanMessage.includes('نصف ساعة') ? 30 : 15;
-
     try {
+      let contactId: string | null = null;
+      if (assigneeName) {
+        let contact = await prisma.contact.findFirst({
+          where: { name: assigneeName },
+        });
+        if (!contact) {
+          contact = await prisma.contact.create({
+            data: {
+              name: assigneeName,
+              phoneNumber: assigneePhone || '',
+            },
+          });
+        } else if (assigneePhone && !contact.phoneNumber) {
+          await prisma.contact.update({
+            where: { id: contact.id },
+            data: { phoneNumber: assigneePhone },
+          });
+        }
+        contactId = contact.id;
+      }
+
       const created = await prisma.task.create({
         data: {
           title: cleanTitle,
           description: cleanMessage,
           dueDate: taskDateUtc,
           reminderType: 'BEFORE',
-          reminderOffset: reminderOffset,
+          reminderOffset: cleanMessage.includes('نصف ساعه') || cleanMessage.includes('نصف ساعة') ? 30 : 15,
           priority: 'HIGH',
+          assigneeId: contactId,
         },
+        include: { assignee: true },
       });
 
-      const displayHour = targetHour > 12 ? targetHour - 12 : targetHour;
+      const displayHour = targetHour > 12 ? targetHour - 12 : (targetHour === 0 ? 12 : targetHour);
       const amPm = targetHour >= 12 ? 'م' : 'ص';
       const timeFormatted = `${String(displayHour).padStart(2, '0')}:${String(targetMinute).padStart(2, '0')} ${amPm}`;
+      const dayLabel = isToday ? 'اليوم' : 'غداً';
 
-      return `أبشر طال عمرك، تم تسجيل المهمة بنجاح:\n\n📌 *${created.title}*\n⏰ الموعد: غداً الساعة ${timeFormatted}\n🔔 التنبيه: مفعّل قبل الموعد بنصف ساعة.`;
+      let reply = `أبشر طال عمرك، تم تسجيل المهمة بنجاح:\n\n📌 *${created.title}*\n⏰ الموعد: ${dayLabel} الساعة ${timeFormatted}`;
+      if (created.assignee) {
+        reply += `\n👤 المكلف: *${created.assignee.name}*`;
+        if (created.assignee.phoneNumber) {
+          reply += ` (${created.assignee.phoneNumber})`;
+        }
+      }
+      reply += `\n🔔 التنبيه: مفعّل قبل الموعد بنصف ساعة.`;
+
+      return reply;
     } catch (e) {
       console.error('خطأ في الحفظ المباشر:', e);
     }
   }
 
-  // 2. معالجة الاستعلامات وباقي الرسائل عبر الذكاء الاصطناعي
+  // 2. معالجة الذكاء الاصطناعي للاستعلامات
   const activeTasks = await prisma.task.findMany({
     where: { status: { not: 'DONE' } },
     orderBy: { dueDate: 'asc' },
@@ -166,16 +221,15 @@ export async function processUserMessage(senderJid: string, userMessage: string)
 التوقيت المحلي الحالي لسلطنة عُمان (UTC+4): ${localTime.toLocaleString('ar-EG')} (اليوم هو: ${todayStr}، غداً هو: ${tomorrowStr}).
 المهام الحالية المسجلة بالنظام: ${JSON.stringify(activeTasks)}.
 
-القواعد الصارمة:
-1. عند طلب إضافة أو جدولة مهمة:
-   - استدعِ دالة create_task فوراً.
-   - احسب dueDate بصيغة UTC (طرح 4 ساعات من توقيت عمان المحلي).
-   - اجعل title مختصراً وواضحاً (أقل من 60 حرفاً) وضع النص التفصيلي في description.
-2. عند السؤال الاستفساري عن جدول الأعمال (مثل: "ايش عندي اليوم"، "ايش عندي بكره"):
-   - استدعِ دالة get_tasks_by_date بالتاريخ المناسب.
-3. عند الإبلاغ عن الإنجاز (مثل: "تم تسليم العينة"، "أنجزت المهمة"):
-   - استدعِ update_task_status بنسبة 100 وحالة DONE.
-4. تحدث بلهجة عربية خليجية مهذبة ومباشرة ("أبشر طال عمرك"، "تم تسجيل الموعد"، "جدولك لليوم...") ولا تستخدم كلمة "يا فندم".
+القواعد:
+1. عند طلب إضافة أو جدولة مهمة أو تذكير شخص آخر (مثل: "ذكر فلان"، "كلف فلان"):
+   - استدعِ دالة create_task فوراً مع تمرير assigneeName و assigneePhone إن وجدا.
+   - احسب dueDate بصيغة UTC (طرح 4 ساعات من توقيت عمان).
+2. عند السؤال عن المهام (مثل: "ايش عندي اليوم"):
+   - استدعِ دالة get_tasks_by_date.
+3. عند الإبلاغ عن الإنجاز:
+   - استدعِ update_task_status.
+4. تحدث بلهجة عربية خليجية مهذبة ومباشرة ("أبشر طال عمرك"، "تم تسجيل الموعد") وتجنب كلمة "يا فندم".
 `;
 
   const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
@@ -183,26 +237,24 @@ export async function processUserMessage(senderJid: string, userMessage: string)
     { role: 'user', content: userMessage },
   ];
 
-  async function executeCompletion() {
-    let lastErr: any = null;
+  try {
+    let response;
     for (const model of SERVERLESS_MODELS) {
       try {
-        return await ai.chat.completions.create({
+        response = await ai.chat.completions.create({
           model,
           messages,
           tools,
           tool_choice: 'auto',
         });
+        if (response) break;
       } catch (err: any) {
-        lastErr = err;
         console.warn(`النموذج ${model} واجه خطأ، جاري تجربة البديل...`);
       }
     }
-    throw lastErr;
-  }
 
-  try {
-    const response = await executeCompletion();
+    if (!response) throw new Error('تعذر معالجة الطلب بالذكاء الاصطناعي');
+
     const responseMessage = response.choices[0].message;
 
     if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
@@ -222,7 +274,7 @@ export async function processUserMessage(senderJid: string, userMessage: string)
               contact = await prisma.contact.create({
                 data: {
                   name: args.assigneeName.trim(),
-                  phoneNumber: args.assigneePhone ? args.assigneePhone.replace(/\D/g, '') : '',
+                  phoneNumber: args.assigneePhone ? String(args.assigneePhone).replace(/\D/g, '') : '',
                 },
               });
             }
@@ -239,6 +291,7 @@ export async function processUserMessage(senderJid: string, userMessage: string)
               reminderOffset: args.reminderOffset ? Number(args.reminderOffset) : 0,
               assigneeId,
             },
+            include: { assignee: true },
           });
 
           toolResults.push({
@@ -311,7 +364,7 @@ export async function processUserMessage(senderJid: string, userMessage: string)
         messages: followUpMessages,
       }));
 
-      return followUpResponse.choices[0].message.content || 'أبشر، تم تنفيذ الأمر وتسجيله في جدولك بنجاح.';
+      return followUpResponse.choices[0].message.content || 'أبشر طال عمرك، تم تنفيذ الأمر وتسجيله في جدولك بنجاح.';
     }
 
     return responseMessage.content || 'أهلاً بك طال عمرك، معك سكرتيرك التنفيذي. كيف أستطيع خدمتك اليوم؟';
