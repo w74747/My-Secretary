@@ -30,7 +30,7 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
             description: 'درجة الأهمية (افتراضي MEDIUM)',
           },
           assigneeName: { type: 'string', description: 'اسم الشخص المكلف بالمهمة (مثال: صفية، أحمد)' },
-          assigneePhone: { type: 'string', description: 'رقم هاتف الشخص المكلف (مثال: 96890683222)' },
+          assigneePhone: { type: 'string', description: 'رقم هاتف الشخص المكلف بالكامل' },
           reminderType: {
             type: 'string',
             enum: ['NONE', 'EXACT', 'BEFORE', 'EVERY_X_HOURS'],
@@ -90,17 +90,26 @@ export async function processUserMessage(senderJid: string, userMessage: string)
   tomorrowDate.setDate(tomorrowDate.getDate() + 1);
   const tomorrowStr = tomorrowDate.toISOString().split('T')[0];
 
-  // 1. معالج محلي فوري للأوامر وتكليف الأشخاص
+  // 1. معالج محلي فوري ودقيق للأوامر وتكليف الأشخاص
   const isCreationIntent = /^(مهمه|مهمة|ذكر|ذَكِّر|ذكرني|سجل|أضف|اضف|كلف|كلّف|أخبر|اخبر)/i.test(cleanMessage);
   if (isCreationIntent) {
-    // أ. استخراج رقم الهاتف إن وجد
-    const phoneMatch = cleanMessage.match(/(?:\+?968)?\s*([79]\d{7}|[0-9]{8,14})/);
-    const assigneePhone = phoneMatch ? phoneMatch[0].replace(/\D/g, '') : null;
+    // أ. استخراج رقم الهاتف بالكامل بدقة متناهية (سواء كتب مع 968 أو بدونها)
+    const phoneMatch = cleanMessage.match(/(?:رقمها|رقمه|رقم|هاتفها|هاتف|جوال|واتساب)?\s*[:=]?\s*(\+?\d{8,15})/i);
+    let assigneePhone: string | null = null;
+    if (phoneMatch) {
+      const rawDigits = phoneMatch[1].replace(/\D/g, '');
+      // إذا كان الرقم عُماني مكون من 8 أرقام يبدأ بـ 7 أو 9، نضيف له مفتاح الدولة تلقائياً
+      if (rawDigits.length === 8 && (rawDigits.startsWith('7') || rawDigits.startsWith('9'))) {
+        assigneePhone = '968' + rawDigits;
+      } else {
+        assigneePhone = rawDigits;
+      }
+    }
 
     // ب. استخراج اسم الشخص المكلف
-    const assigneeMatch = cleanMessage.match(/(?:ذكر|ذَكِّر|كلف|كلّف|أخبر|اخبر|مهمة لـ?|مهمه لـ?)\s+([^\s\n،,]+)/i);
+    const assigneeMatch = cleanMessage.match(/(?:ذكر|ذَكِّر|كلف|كلّف|أخبر|اخبر|مهمة لـ?|مهمه لـ?|اتصال بـ?|تتصل بـ?)\s+([^\s\n،,:]+)/i);
     let assigneeName: string | null = null;
-    if (assigneeMatch && !['لي', 'ليوم', 'نفسي', 'بكره', 'اليوم', 'موعد'].includes(assigneeMatch[1])) {
+    if (assigneeMatch && !['لي', 'ليوم', 'نفسي', 'بكره', 'اليوم', 'موعد', 'الساعه', 'الساعة', 'بي'].includes(assigneeMatch[1])) {
       assigneeName = assigneeMatch[1].trim();
     }
 
@@ -108,10 +117,10 @@ export async function processUserMessage(senderJid: string, userMessage: string)
     const isToday = cleanMessage.includes('اليوم');
     const targetDayObj = isToday ? new Date(localTime) : new Date(tomorrowDate);
 
-    // د. استخراج الوقت بدقة (ساعات ودقائق ومساء/صباحاً)
+    // د. استخراج الوقت بدقة (الساعات والدقائق)
     let targetHour = 9;
     let targetMinute = 0;
-    const isEvening = /مساء|مساءً|م|بالليل|عصر|عصراً|ظهر|ظهراً/i.test(cleanMessage);
+    const isEvening = /مساء|مساءً|بالليل|عصر|عصراً|ظهر|ظهراً/i.test(cleanMessage);
 
     const timeExplicit = cleanMessage.match(/(\d{1,2})(?::(\d{2}))?/);
     if (timeExplicit) {
@@ -140,19 +149,33 @@ export async function processUserMessage(senderJid: string, userMessage: string)
       0
     ));
 
-    // هـ. تنظيف عنوان المهمة
-    let cleanTitle = cleanMessage
-      .replace(/^(مهمه لبكره|مهمة لبكرة|مهمه|مهمة|ذكرني|سجل موعد|سجل لي موعد|سجل|ذكر|ذَكِّر|كلف|كلّف)\s*/i, '')
-      .replace(/(?:اليوم|بكره|غدا|غداً|الساعه|الساعة|\d{1,2}(?::\d{2})?|صباحا|صباحاً|مساء|مساءً|م|ص|ونص|وربع)/gi, '')
-      .replace(/(?:هذا رقمها|هذا رقمه|رقمها|رقمه|رقم|هاتف)\s*:?\s*[\d\+]+/gi, '')
-      .split('ذكرني')[0]
+    // هـ. تنظيف عنوان المهمة بأمان وبدون حذف حروف أصلية من الكلمات
+    // إزالة جزء الرقم أولاً
+    let textWithoutPhone = cleanMessage.replace(/(?:هذا\s+)?(?:رقمها|رقمه|رقم|هاتفها|هاتف|جوال)?\s*[:=]?\s*\+?\d{8,15}/gi, '').trim();
+
+    // إزالة الكلمات الافتتاحية
+    let cleanTitle = textWithoutPhone
+      .replace(/^(?:مهمه لبكره|مهمة لبكرة|مهمه|مهمة|ذكرني|سجل موعد|سجل لي موعد|سجل|ذكر|ذَكِّر|كلف|كلّف)\s*/i, '')
+      .trim();
+
+    // إزالة عبارات التوقيت فقط ككلمات كاملة
+    cleanTitle = cleanTitle
+      .replace(/\b(?:اليوم|بكره|غدا|غداً)\b/gi, '')
+      .replace(/الساع[ةه]\s*\d{1,2}(?::\d{2})?\s*(?:صباحاً|صباحا|مساءً|مساء|ونص|وربع)?/gi, '')
+      .replace(/\b\d{1,2}:\d{2}\s*(?:صباحاً|صباحا|مساءً|مساء)?\b/gi, '')
+      .replace(/\b\d{1,2}\s*(?:ونص|وربع)\s*(?:صباحاً|صباحا|مساءً|مساء)?\b/gi, '')
+      .replace(/\b(?:صباحاً|صباحا|مساءً|مساء)\b/gi, '')
+      .split(/\bذكرني\b/)[0]
       .replace(/^[\s,،-]+/, '')
+      .replace(/\s+/g, ' ')
       .trim();
 
     if (!cleanTitle || cleanTitle.length < 3) {
-      cleanTitle = assigneeName ? `مهمة لـ ${assigneeName}` : 'موعد ومتابعة أعمال';
+      cleanTitle = assigneeName ? `مهمة ${assigneeName}` : 'موعد ومتابعة أعمال';
     }
     cleanTitle = cleanTitle.slice(0, 70);
+
+    const reminderOffset = cleanMessage.includes('نصف ساعه') || cleanMessage.includes('نصف ساعة') ? 30 : 15;
 
     try {
       let contactId: string | null = null;
@@ -167,8 +190,8 @@ export async function processUserMessage(senderJid: string, userMessage: string)
               phoneNumber: assigneePhone || '',
             },
           });
-        } else if (assigneePhone && !contact.phoneNumber) {
-          await prisma.contact.update({
+        } else if (assigneePhone && contact.phoneNumber !== assigneePhone) {
+          contact = await prisma.contact.update({
             where: { id: contact.id },
             data: { phoneNumber: assigneePhone },
           });
@@ -182,7 +205,7 @@ export async function processUserMessage(senderJid: string, userMessage: string)
           description: cleanMessage,
           dueDate: taskDateUtc,
           reminderType: 'BEFORE',
-          reminderOffset: cleanMessage.includes('نصف ساعه') || cleanMessage.includes('نصف ساعة') ? 30 : 15,
+          reminderOffset: reminderOffset,
           priority: 'HIGH',
           assigneeId: contactId,
         },
@@ -223,12 +246,12 @@ export async function processUserMessage(senderJid: string, userMessage: string)
 
 القواعد:
 1. عند طلب إضافة أو جدولة مهمة أو تذكير شخص آخر (مثل: "ذكر فلان"، "كلف فلان"):
-   - استدعِ دالة create_task فوراً مع تمرير assigneeName و assigneePhone إن وجدا.
+   - استدعِ دالة create_task فوراً مع تمرير assigneeName و assigneePhone بالكامل إن وجدا.
    - احسب dueDate بصيغة UTC (طرح 4 ساعات من توقيت عمان).
 2. عند السؤال عن المهام (مثل: "ايش عندي اليوم"):
    - استدعِ دالة get_tasks_by_date.
 3. عند الإبلاغ عن الإنجاز:
-   - استدعِ update_task_status.
+   - استدعِ update_task_status بنسبة 100 وحالة DONE.
 4. تحدث بلهجة عربية خليجية مهذبة ومباشرة ("أبشر طال عمرك"، "تم تسجيل الموعد") وتجنب كلمة "يا فندم".
 `;
 
@@ -237,24 +260,26 @@ export async function processUserMessage(senderJid: string, userMessage: string)
     { role: 'user', content: userMessage },
   ];
 
-  try {
-    let response;
+  async function executeCompletion() {
+    let lastErr: any = null;
     for (const model of SERVERLESS_MODELS) {
       try {
-        response = await ai.chat.completions.create({
+        return await ai.chat.completions.create({
           model,
           messages,
           tools,
           tool_choice: 'auto',
         });
-        if (response) break;
       } catch (err: any) {
+        lastErr = err;
         console.warn(`النموذج ${model} واجه خطأ، جاري تجربة البديل...`);
       }
     }
+    throw lastErr;
+  }
 
-    if (!response) throw new Error('تعذر معالجة الطلب بالذكاء الاصطناعي');
-
+  try {
+    const response = await executeCompletion();
     const responseMessage = response.choices[0].message;
 
     if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
@@ -270,12 +295,18 @@ export async function processUserMessage(senderJid: string, userMessage: string)
             let contact = await prisma.contact.findFirst({
               where: { name: args.assigneeName.trim() },
             });
+            const cleanPhone = args.assigneePhone ? String(args.assigneePhone).replace(/\D/g, '') : '';
             if (!contact) {
               contact = await prisma.contact.create({
                 data: {
                   name: args.assigneeName.trim(),
-                  phoneNumber: args.assigneePhone ? String(args.assigneePhone).replace(/\D/g, '') : '',
+                  phoneNumber: cleanPhone,
                 },
+              });
+            } else if (cleanPhone && contact.phoneNumber !== cleanPhone) {
+              contact = await prisma.contact.update({
+                where: { id: contact.id },
+                data: { phoneNumber: cleanPhone },
               });
             }
             assigneeId = contact.id;
