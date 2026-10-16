@@ -19,8 +19,11 @@ export class WhatsAppService {
   public qrCodeDataUrl: string | null = null;
   public isConnected: boolean = false;
   private isConnecting: boolean = false;
+  private sessionDir: string;
 
-  private constructor() {}
+  private constructor() {
+    this.sessionDir = path.join(process.cwd(), 'whatsapp_session');
+  }
 
   public static getInstance(): WhatsAppService {
     if (!WhatsAppService.instance) {
@@ -33,24 +36,17 @@ export class WhatsAppService {
     if (this.isConnecting) return;
     this.isConnecting = true;
 
-    const logger = pino({ level: 'warn' });
+    const logger = pino({ level: 'silent' });
 
     try {
-      // التأكد من وجود مجلد الجلسة بمسار نظام مؤكد
-      const sessionDir = path.join(process.cwd(), 'whatsapp_session');
-      if (!fs.existsSync(sessionDir)) {
-        fs.mkdirSync(sessionDir, { recursive: true });
+      if (!fs.existsSync(this.sessionDir)) {
+        fs.mkdirSync(this.sessionDir, { recursive: true });
       }
 
-      console.log('⏳ جاري تحميل مفاتيح الجلسة وإصدار واتساب...');
-      const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-      
-      const { version, isLatest } = await fetchLatestBaileysVersion().catch(() => ({
+      const { state, saveCreds } = await useMultiFileAuthState(this.sessionDir);
+      const { version } = await fetchLatestBaileysVersion().catch(() => ({
         version: [2, 3000, 1015901307] as [number, number, number],
-        isLatest: true,
       }));
-
-      console.log(`📡 إصدار واتساب: v${version.join('.')} (الأحدث: ${isLatest})`);
 
       this.sock = makeWASocket({
         version,
@@ -63,7 +59,7 @@ export class WhatsAppService {
         browser: ['Ubuntu', 'Chrome', '122.0.0.0'],
         syncFullHistory: false,
         connectTimeoutMs: 60000,
-        defaultQueryTimeoutMs: 60000,
+        keepAliveIntervalMs: 25000,
       });
 
       this.sock.ev.on('creds.update', saveCreds);
@@ -72,15 +68,11 @@ export class WhatsAppService {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
-          console.log('\n======================================================');
-          console.log('📌 تم استلام كود QR بنجاح:');
-          console.log('======================================================');
-          qrcodeTerminal.generate(qr, { small: true });
-
+          console.log('📌 تم استلام كود QR جديد للمسح');
           try {
             this.qrCodeDataUrl = await QRCode.toDataURL(qr);
           } catch (err) {
-            console.error('خطأ في تحويل الـ QR إلى صورة:', err);
+            console.error('خطأ تحويل الـ QR:', err);
           }
         }
 
@@ -88,7 +80,7 @@ export class WhatsAppService {
           this.isConnected = true;
           this.isConnecting = false;
           this.qrCodeDataUrl = null;
-          console.log('🎉 ✅ تم الاتصال بواتساب بنجاح!');
+          console.log('✅ تم الاتصال بواتساب بنجاح وجلسة العمل مستقرة!');
         }
 
         if (connection === 'close') {
@@ -97,18 +89,16 @@ export class WhatsAppService {
 
           const error = lastDisconnect?.error;
           const statusCode = (error as Boom)?.output?.statusCode;
-          const errorMessage = error?.message || String(error);
-
-          console.log(`⚠️ تم قطع الاتصال. الكود: ${statusCode || 'غير محدد'}, السبب: ${errorMessage}`);
-
           const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
+          console.log(`⚠️ حالة الاتصال: مغلق (الرمز: ${statusCode}). إعادة المحاولة: ${shouldReconnect}`);
+
+          // إعادة الاتصال التلقائي مهما حدث طالما لم يتم طلب تسجيل خروج صريح
           if (shouldReconnect) {
-            console.log('🔄 إعادة المحاولة خلال 5 ثوانٍ...');
-            setTimeout(() => this.init(), 5000);
+            setTimeout(() => this.init(), 3000);
           } else {
-            console.log('🛑 انتهت صلاحية الجلسة، يتطلب مسح QR جديد.');
-            this.qrCodeDataUrl = null;
+            console.log('🛑 تم تسجيل الخروج يدوياً. مسح الجلسة القديمة...');
+            await this.clearSession();
           }
         }
       });
@@ -117,29 +107,65 @@ export class WhatsAppService {
         const msg = chatUpdate.messages[0];
         if (!msg || !msg.message || msg.key.fromMe) return;
 
-        const sender = msg.key.remoteJid;
+        const sender = msg.key.remoteJid || '';
+        const cleanSender = sender.replace('@s.whatsapp.net', '').replace('@lid', '');
+        const ownerPhone = process.env.OWNER_PHONE ? process.env.OWNER_PHONE.replace(/\D/g, '') : '';
+
+        // إذا كان رقم المالك محدداً، نرفض تلقي الأوامر من أي رقم غريب
+        if (ownerPhone && !cleanSender.includes(ownerPhone)) {
+          console.log(`تم تجاهل رسالة من رقم غير مصرح: ${cleanSender}`);
+          return;
+        }
+
         const textMessage =
           msg.message.conversation ||
           msg.message.extendedTextMessage?.text ||
           '';
 
-        if (!sender || !textMessage.trim()) return;
+        if (!textMessage.trim()) return;
 
-        console.log(`📩 رسالة واردة من [${sender}]: ${textMessage}`);
+        console.log(`📩 رسالة معتمدة من المالك [${cleanSender}]: ${textMessage}`);
 
         try {
-          const replyText = await processUserMessage(sender, textMessage);
+          const replyText = await processUserMessage(cleanSender, textMessage);
           if (this.sock && replyText) {
             await this.sock.sendMessage(sender, { text: replyText });
           }
         } catch (error) {
-          console.error('❌ خطأ أثناء معالجة الذكاء الاصطناعي:', error);
+          console.error('خطأ أثناء معالجة رسالة الذكاء الاصطناعي:', error);
         }
       });
     } catch (err) {
       this.isConnecting = false;
-      console.error('❌ خطأ في تهيئة السيركت:', err);
-      setTimeout(() => this.init(), 6000);
+      console.error('خطأ في الاتصال، إعادة المحاولة:', err);
+      setTimeout(() => this.init(), 5000);
+    }
+  }
+
+  // دالة تسجيل الخروج اليدوي من داخل المنصة
+  public async logout(): Promise<void> {
+    try {
+      if (this.sock) {
+        await this.sock.logout();
+      }
+    } catch (e) {
+      // تجاهل أخطاء قطع السوكيت أثناء الخروج
+    }
+    await this.clearSession();
+    this.isConnected = false;
+    this.sock = null;
+    this.qrCodeDataUrl = null;
+    // إعادة التهيئة لإنشاء كود QR جديد
+    setTimeout(() => this.init(), 1000);
+  }
+
+  private async clearSession() {
+    try {
+      if (fs.existsSync(this.sessionDir)) {
+        fs.rmSync(this.sessionDir, { recursive: true, force: true });
+      }
+    } catch (err) {
+      console.error('خطأ أثناء حذف ملفات الجلسة:', err);
     }
   }
 
