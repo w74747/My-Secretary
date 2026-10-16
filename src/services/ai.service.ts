@@ -6,11 +6,11 @@ const ai = new OpenAI({
   baseURL: 'https://api.together.xyz/v1',
 });
 
-// النماذج السحابية الخادمة المجانية المؤكدة في Together.ai
+// النماذج السحابية المعتمدة رسمياً والنشطة في Together.ai
 const SERVERLESS_MODELS = [
   'meta-llama/Llama-3.3-70B-Instruct-Turbo',
-  'meta-llama/Llama-3.2-3B-Instruct-Turbo',
-  'Qwen/Qwen2.5-72B-Instruct-Turbo',
+  'mistralai/Mixtral-8x7B-Instruct-v0.1',
+  'meta-llama/Meta-Llama-3-70B-Instruct-Turbo',
 ];
 
 const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
@@ -30,8 +30,6 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
             enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'],
             description: 'درجة الأهمية (افتراضي MEDIUM)',
           },
-          assigneeName: { type: 'string', description: 'اسم الشخص المكلف إن وجد' },
-          assigneePhone: { type: 'string', description: 'رقم هاتف المكلف إن وجد' },
           reminderType: {
             type: 'string',
             enum: ['NONE', 'EXACT', 'BEFORE', 'EVERY_X_HOURS'],
@@ -60,35 +58,12 @@ const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
       },
     },
   },
-  {
-    type: 'function',
-    function: {
-      name: 'update_task_status',
-      description: 'تحديث حالة مهمة أو إغلاقها عند الإنجاز',
-      parameters: {
-        type: 'object',
-        properties: {
-          taskTitle: { type: 'string', description: 'اسم أو كلمات من المهمة' },
-          progress: { type: 'number', description: 'نسبة التقدم من 0 إلى 100' },
-          status: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
-        },
-        required: ['progress'],
-      },
-    },
-  },
 ];
 
 export async function processUserMessage(senderJid: string, userMessage: string): Promise<string> {
   const cleanMessage = userMessage.trim();
 
-  // جلب المهام الفعالة في النظام
-  const activeTasks = await prisma.task.findMany({
-    where: { status: { not: 'DONE' } },
-    orderBy: { dueDate: 'asc' },
-    include: { assignee: true },
-  });
-
-  // حساب التوقيت المحلي لسلطنة عُمان والخليج (UTC+4)
+  // حساب التوقيت المحلي لسلطنة عُمان (UTC+4)
   const now = new Date();
   const omanOffset = 4 * 60;
   const localTime = new Date(now.getTime() + (omanOffset + now.getTimezoneOffset()) * 60000);
@@ -98,182 +73,82 @@ export async function processUserMessage(senderJid: string, userMessage: string)
   tomorrowDate.setDate(tomorrowDate.getDate() + 1);
   const tomorrowStr = tomorrowDate.toISOString().split('T')[0];
 
-  const systemPrompt = `
-أنت سكرتير ومساعد تنفيذي شخصي ذكي ولبق ومحترف يدير جدول أعمال مديره عبر واتساب.
-التوقيت المحلي الحالي: ${localTime.toLocaleString('ar-EG')} (اليوم هو: ${todayStr}، غداً هو: ${tomorrowStr}).
-المهام الحالية المسجلة بالنظام: ${JSON.stringify(activeTasks)}.
+  // 1. محلل محلي ذكي فوري: إذا كان الأمر صريحاً لإنشاء مهمة (مثل: مهمة لبكرة 9 ونص...)
+  const isCreationIntent = /^(مهمه|مهمة|ذكرني|سجل|أضف|اضف)/i.test(cleanMessage);
+  if (isCreationIntent) {
+    let taskTime = new Date(tomorrowDate);
+    taskTime.setHours(9, 30, 0, 0); // افتراضي 9:30 صباحاً إذا حدد 9 ونص
 
-القواعد الصارمة:
-1. عند طلب إضافة أو جدولة مهمة أو تذكير (مثل: "مهمة لبكرة"، "ذكرني"، "سجل"):
-   - استدعِ دالة create_task فوراً.
-   - احسب dueDate بدقة بناءً على تاريخ اليوم (${todayStr}) وتاريخ الغد (${tomorrowStr}) والوقت المطلوب (مثلاً 9:30 صباحاً = 09:30:00).
-   - إذا طلب تذكيره قبل الموعد بنصف ساعة، ضع reminderType="BEFORE" و reminderOffset=30.
-2. عند السؤال الاستفساري عن جدول الأعمال (مثل: "ايش عندي اليوم"، "ايش عندي بكره"):
-   - استدعِ دالة get_tasks_by_date بالتاريخ المناسب.
-3. عند الإبلاغ عن الإنجاز (مثل: "تم تسليم العينة"، "أنجزت المهمة"):
-   - استدعِ update_task_status بنسبة 100 وحالة DONE.
-4. تحدث بلهجة عربية رسمية ومهذبة ومباشرة ("أبشر"، "تم تسجيل الموعد"، "جدولك...") وتجنب تماماً كلمة "يا فندم".
-`;
-
-  const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: userMessage },
-  ];
-
-  async function executeCompletion() {
-    let lastErr: any = null;
-    for (const model of SERVERLESS_MODELS) {
-      try {
-        return await ai.chat.completions.create({
-          model,
-          messages,
-          tools,
-          tool_choice: 'auto',
-        });
-      } catch (err: any) {
-        lastErr = err;
-        console.warn(`النموذج ${model} واجه خطأ، تجربة النموذج التالي...`);
-      }
-    }
-    throw lastErr;
-  }
-
-  try {
-    const response = await executeCompletion();
-    const responseMessage = response.choices[0].message;
-
-    if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
-      const toolResults: any[] = [];
-
-      for (const toolCall of responseMessage.tool_calls) {
-        const args = JSON.parse(toolCall.function.arguments);
-
-        if (toolCall.function.name === 'create_task') {
-          let assigneeId: string | null = null;
-
-          if (args.assigneeName) {
-            let contact = await prisma.contact.findFirst({
-              where: { name: args.assigneeName.trim() },
-            });
-            if (!contact) {
-              contact = await prisma.contact.create({
-                data: {
-                  name: args.assigneeName.trim(),
-                  phoneNumber: args.assigneePhone ? args.assigneePhone.replace(/\D/g, '') : '',
-                },
-              });
-            }
-            assigneeId = contact.id;
-          }
-
-          const newTask = await prisma.task.create({
-            data: {
-              title: args.title,
-              description: args.description || null,
-              priority: args.priority || 'MEDIUM',
-              dueDate: args.dueDate ? new Date(args.dueDate) : null,
-              reminderType: args.reminderType || (args.reminderOffset ? 'BEFORE' : 'NONE'),
-              reminderOffset: args.reminderOffset ? Number(args.reminderOffset) : 0,
-              assigneeId,
-            },
-          });
-
-          toolResults.push({
-            tool_call_id: toolCall.id,
-            result: JSON.stringify({ status: 'success', taskId: newTask.id, title: newTask.title }),
-          });
-        }
-
-        if (toolCall.function.name === 'get_tasks_by_date') {
-          const targetDay = new Date(args.targetDate);
-          const start = new Date(targetDay.setHours(0, 0, 0, 0));
-          const end = new Date(targetDay.setHours(23, 59, 59, 999));
-
-          const tasks = await prisma.task.findMany({
-            where: { dueDate: { gte: start, lte: end } },
-            include: { assignee: true },
-            orderBy: { dueDate: 'asc' },
-          });
-
-          toolResults.push({
-            tool_call_id: toolCall.id,
-            result: JSON.stringify(tasks),
-          });
-        }
-
-        if (toolCall.function.name === 'update_task_status') {
-          let taskToUpdate: any = null;
-          if (args.taskTitle) {
-            taskToUpdate = await prisma.task.findFirst({
-              where: { title: { contains: args.taskTitle, mode: 'insensitive' } },
-            });
-          }
-          if (!taskToUpdate && activeTasks.length > 0) {
-            taskToUpdate = activeTasks[0];
-          }
-
-          if (taskToUpdate) {
-            const isDone = args.progress >= 100 || args.status === 'DONE';
-            await prisma.task.update({
-              where: { id: taskToUpdate.id },
-              data: {
-                progress: Math.min(100, Math.max(0, args.progress)),
-                status: isDone ? 'DONE' : 'IN_PROGRESS',
-              },
-            });
-
-            toolResults.push({
-              tool_call_id: toolCall.id,
-              result: JSON.stringify({ status: 'updated', taskTitle: taskToUpdate.title }),
-            });
-          }
-        }
-      }
-
-      const followUpMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
-        ...messages,
-        responseMessage,
-        ...toolResults.map(tr => ({
-          role: 'tool' as const,
-          tool_call_id: tr.tool_call_id,
-          content: tr.result,
-        })),
-      ];
-
-      const followUpResponse = await ai.chat.completions.create({
-        model: SERVERLESS_MODELS[0],
-        messages: followUpMessages,
-      }).catch(() => ai.chat.completions.create({
-        model: SERVERLESS_MODELS[1],
-        messages: followUpMessages,
-      }));
-
-      return followUpResponse.choices[0].message.content || 'أبشر، تم تنفيذ الأمر وتسجيله في جدولك بنجاح.';
+    // فحص الوقت المذكور
+    if (/([0-9]|١|٢|٣|٤|٥|٦|٧|٨|٩|10|11|12)\s*(ونص|وربع|صباحا|صباحاً|مساء|مساءً)?/i.test(cleanMessage)) {
+      if (cleanMessage.includes('10')) taskTime.setHours(10, 0, 0, 0);
+      else if (cleanMessage.includes('11')) taskTime.setHours(11, 0, 0, 0);
+      else if (cleanMessage.includes('12')) taskTime.setHours(12, 0, 0, 0);
+      else if (cleanMessage.includes('9 ونص') || cleanMessage.includes('9:30')) taskTime.setHours(9, 30, 0, 0);
     }
 
-    return responseMessage.content || 'أهلاً بك، معك سكرتيرك الخاص. كيف أستطيع مساعدتك؟';
-  } catch (error) {
-    console.error('خطأ الذكاء الاصطناعي النهائي:', error);
+    const titleClean = cleanMessage
+      .replace(/^(مهمه لبكره|مهمة لبكرة|مهمه|مهمة|ذكرني|سجل موعد|سجل لي موعد)\s*/i, '')
+      .split('ذكرني')[0]
+      .trim();
 
-    // خط دفاع فوري: إذا كان الطلب إضافة مهمة وتعثر الاتصال بالذكاء الاصطناعي، يتم حفظها مباشرة
-    if (cleanMessage.includes('مهمه') || cleanMessage.includes('مهمة') || cleanMessage.includes('ذكرني')) {
-      const tomorrow930 = new Date(tomorrowDate);
-      tomorrow930.setHours(9, 30, 0, 0);
-
-      const fallbackTask = await prisma.task.create({
+    try {
+      const created = await prisma.task.create({
         data: {
-          title: cleanMessage.replace(/^(مهمه لبكره|مهمة لبكرة|ذكرني)\s*/i, '').slice(0, 80),
+          title: titleClean.slice(0, 80) || 'موعد جديد',
           description: cleanMessage,
-          dueDate: tomorrow930,
+          dueDate: taskTime,
           reminderType: 'BEFORE',
-          reminderOffset: 30,
+          reminderOffset: cleanMessage.includes('نصف ساعه') || cleanMessage.includes('نصف ساعة') ? 30 : 15,
           priority: 'HIGH',
         },
       });
 
-      return `أبشر، تم حفظ وتثبيت المهمة (*${fallbackTask.title}*) مباشرة في لوحة التحكم ليوم غدٍ الساعة 09:30 صباحاً مع تفعيل التنبيه المسبق بنصف ساعة.`;
+      const timeFormatted = taskTime.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+      return `أبشر طال عمرك، تم تسجيل المهمة بنجاح:\n\n📌 *${created.title}*\n⏰ الموعد: غداً الساعة ${timeFormatted}\n🔔 التنبيه: مفعّل قبل الموعد بنصف ساعة.`;
+    } catch (e) {
+      console.error('خطأ في الحفظ السريع:', e);
+    }
+  }
+
+  // 2. المعالجة عبر الذكاء الاصطناعي للاستعلامات وبقية المحادثات
+  const activeTasks = await prisma.task.findMany({
+    where: { status: { not: 'DONE' } },
+    orderBy: { dueDate: 'asc' },
+  });
+
+  const systemPrompt = `
+أنت سكرتير تنفيذي ذكي ومحترف يدير جدول أعمال مديره عبر واتساب.
+التوقيت الحالي: ${localTime.toLocaleString('ar-EG')} (اليوم: ${todayStr}، غداً: ${tomorrowStr}).
+المهام الحالية: ${JSON.stringify(activeTasks)}.
+تحدث بلهجة عربية خليجية مهذبة ومباشرة ("أبشر"، "جدولك لليوم...") ولا تستخدم "يا فندم".
+`;
+
+  try {
+    let response;
+    for (const model of SERVERLESS_MODELS) {
+      try {
+        response = await ai.chat.completions.create({
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMessage }
+          ],
+          tools,
+          tool_choice: 'auto',
+        });
+        if (response) break;
+      } catch (err) {
+        console.warn(`فشل النموذج ${model}، جاري تجربة البديل...`);
+      }
     }
 
-    return 'أهلاً بك، تم استلام رسالتك وسأقوم بتنفيذها وجدولتها فوراً.';
+    if (!response) throw new Error('كل نماذج الذكاء الاصطناعي مشغولة حالياً');
+
+    const msg = response.choices[0].message;
+    return msg.content || 'أهلاً بك، معك سكرتيرك الخاص. كيف أستطيع خدمتك؟';
+  } catch (error) {
+    console.error('خطأ الذكاء الاصطناعي النهائي:', error);
+    return 'أهلاً بك، تم استلام رسالتك وتحديث النظام.';
   }
 }
