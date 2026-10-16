@@ -99,29 +99,36 @@ async function runReminderEngine() {
           hour12: true,
         }).format(new Date(task.dueDate));
 
-        // تحديد ما إذا كان الموعد اليوم أو غداً بتوقيت عُمان
         const nowOman = new Date(now.getTime() + 4 * 3600000);
         const taskOman = new Date(task.dueDate.getTime() + 4 * 3600000);
         const isToday = nowOman.getUTCDate() === taskOman.getUTCDate();
         const dayText = isToday ? 'اليوم' : 'غداً';
 
-        // 1. إذا كانت المهمة موجهة لشخص مكلّف (مثل صفية)
+        // 1. إذا كانت المهمة موجهة لشخص مكلّف (مثل مصعب أو صفية)
         if (task.assignee && task.assignee.phoneNumber) {
-          // تحويل صيغة الغائب (صفية تتصل بي) إلى صيغة مباشرة ولبقة
+          // تنظيف عنوان المهمة من أي كلمات توقيت زائدة
           let actionText = task.title
-            .replace(/^[^\s]+\s+(?:تتصل|يتصل)\s+بي/i, 'اتصل بي')
-            .replace(/^(?:تتصل|يتصل)\s+بي/i, 'اتصل بي')
+            .replace(/\b(?:اليوم|بكره|غدا|غداً|الساعه|الساعة)\b/gi, '')
             .trim();
 
-          if (!actionText || actionText.length < 3) {
-            actionText = 'اتصل بي';
-          }
+          // تحويل أفعال الغائب إلى صيغة المخاطب المباشر
+          actionText = actionText
+            .replace(/^(?:يتصل|تتصل)\s+بي/i, 'اتصل بي')
+            .replace(/^يزور\b/i, 'تزور')
+            .replace(/^ينام\b/i, 'تنام')
+            .replace(/^يذهب\b/i, 'تذهب')
+            .replace(/^يحضر\b/i, 'تحضر')
+            .replace(/^يسلم\b/i, 'تسلم')
+            .replace(/^يقابل\b/i, 'تقابل')
+            .replace(/^يرسل\b/i, 'ترسل')
+            .replace(/^يراجع\b/i, 'تراجع')
+            .trim();
 
-          // الصيغة الطبيعية والمختصرة من حسابك الشخصي
+          // رسالة عفوية، مهذبة ومباشرة دون صفات رسمية مفرطة
           const assigneeMsg = `مرحباً،\nلطفاً ${actionText} ${dayText} الساعة ${timeFormatted}.`;
 
           await whatsappService.sendMessage(task.assignee.phoneNumber, assigneeMsg);
-          console.log(`🔔 تم إرسال رسالة التذكير إلى المكلف [${task.assignee.name}] (${task.assignee.phoneNumber})`);
+          console.log(`🔔 تم إرسال رسالة التذكير إلى المكلف [${task.assignee.name}] (${task.assignee.phoneNumber}): ${assigneeMsg}`);
         } 
         // 2. إذا كانت المهمة تذكيراً شخصياً لك
         else {
@@ -129,11 +136,9 @@ async function runReminderEngine() {
           if (ownerPhone) {
             const ownerMsg = `⏰ تذكير بموعد: ${task.title} (${dayText} الساعة ${timeFormatted}).`;
             await whatsappService.sendMessage(ownerPhone, ownerMsg);
-            console.log(`🔔 تم إرسال تذكير الموعد الشخصي إلى حسابك`);
           }
         }
 
-        // تسجيل تاريخ إرسال التنبيه لمنع تكراره
         await prisma.task.update({
           where: { id: task.id },
           data: { lastReminderSent: now },
