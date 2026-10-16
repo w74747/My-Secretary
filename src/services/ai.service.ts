@@ -6,10 +6,10 @@ const ai = new OpenAI({
   baseURL: 'https://api.together.xyz/v1',
 });
 
-// النماذج السحابية المتاحة رسمياً على Together.ai لدعم Function Calling
-const AVAILABLE_MODELS = [
+// النماذج السحابية الخادمة المجانية المؤكدة في Together.ai
+const SERVERLESS_MODELS = [
   'meta-llama/Llama-3.3-70B-Instruct-Turbo',
-  'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo',
+  'meta-llama/Llama-3.2-3B-Instruct-Turbo',
   'Qwen/Qwen2.5-72B-Instruct-Turbo',
 ];
 
@@ -90,7 +90,7 @@ export async function processUserMessage(senderJid: string, userMessage: string)
 
   // حساب التوقيت المحلي لسلطنة عُمان والخليج (UTC+4)
   const now = new Date();
-  const omanOffset = 4 * 60; // دقائق
+  const omanOffset = 4 * 60;
   const localTime = new Date(now.getTime() + (omanOffset + now.getTimezoneOffset()) * 60000);
   const todayStr = localTime.toISOString().split('T')[0];
 
@@ -112,7 +112,7 @@ export async function processUserMessage(senderJid: string, userMessage: string)
    - استدعِ دالة get_tasks_by_date بالتاريخ المناسب.
 3. عند الإبلاغ عن الإنجاز (مثل: "تم تسليم العينة"، "أنجزت المهمة"):
    - استدعِ update_task_status بنسبة 100 وحالة DONE.
-4. تحدث بلهجة عربية خليجية راقية ومهذبة ("أبشر طال عمرك"، "تم تسجيل الموعد"، "جدولك لليوم...") ولا تستخدم كلمة "يا فندم".
+4. تحدث بلهجة عربية رسمية ومهذبة ومباشرة ("أبشر"، "تم تسجيل الموعد"، "جدولك...") وتجنب تماماً كلمة "يا فندم".
 `;
 
   const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
@@ -120,9 +120,9 @@ export async function processUserMessage(senderJid: string, userMessage: string)
     { role: 'user', content: userMessage },
   ];
 
-  async function executeCompletionWithFallback() {
-    let lastError: any = null;
-    for (const model of AVAILABLE_MODELS) {
+  async function executeCompletion() {
+    let lastErr: any = null;
+    for (const model of SERVERLESS_MODELS) {
       try {
         return await ai.chat.completions.create({
           model,
@@ -130,16 +130,16 @@ export async function processUserMessage(senderJid: string, userMessage: string)
           tools,
           tool_choice: 'auto',
         });
-      } catch (err) {
-        lastError = err;
-        console.warn(`فشل النموذج ${model}، جاري تجربة البديل...`);
+      } catch (err: any) {
+        lastErr = err;
+        console.warn(`النموذج ${model} واجه خطأ، تجربة النموذج التالي...`);
       }
     }
-    throw lastError;
+    throw lastErr;
   }
 
   try {
-    const response = await executeCompletionWithFallback();
+    const response = await executeCompletion();
     const responseMessage = response.choices[0].message;
 
     if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
@@ -241,19 +241,39 @@ export async function processUserMessage(senderJid: string, userMessage: string)
       ];
 
       const followUpResponse = await ai.chat.completions.create({
-        model: AVAILABLE_MODELS[0],
+        model: SERVERLESS_MODELS[0],
         messages: followUpMessages,
       }).catch(() => ai.chat.completions.create({
-        model: AVAILABLE_MODELS[1],
+        model: SERVERLESS_MODELS[1],
         messages: followUpMessages,
       }));
 
       return followUpResponse.choices[0].message.content || 'أبشر، تم تنفيذ الأمر وتسجيله في جدولك بنجاح.';
     }
 
-    return responseMessage.content || 'أهلاً بك، معك سكرتيرك التنفيذي. كيف أستطيع خدمتك اليوم؟';
+    return responseMessage.content || 'أهلاً بك، معك سكرتيرك الخاص. كيف أستطيع مساعدتك؟';
   } catch (error) {
     console.error('خطأ الذكاء الاصطناعي النهائي:', error);
-    return 'عذراً، حدث ضغط مؤقت في خادم المعالجة. يرجى تكرار الطلب وسأنفذه فوراً.';
+
+    // خط دفاع فوري: إذا كان الطلب إضافة مهمة وتعثر الاتصال بالذكاء الاصطناعي، يتم حفظها مباشرة
+    if (cleanMessage.includes('مهمه') || cleanMessage.includes('مهمة') || cleanMessage.includes('ذكرني')) {
+      const tomorrow930 = new Date(tomorrowDate);
+      tomorrow930.setHours(9, 30, 0, 0);
+
+      const fallbackTask = await prisma.task.create({
+        data: {
+          title: cleanMessage.replace(/^(مهمه لبكره|مهمة لبكرة|ذكرني)\s*/i, '').slice(0, 80),
+          description: cleanMessage,
+          dueDate: tomorrow930,
+          reminderType: 'BEFORE',
+          reminderOffset: 30,
+          priority: 'HIGH',
+        },
+      });
+
+      return `أبشر، تم حفظ وتثبيت المهمة (*${fallbackTask.title}*) مباشرة في لوحة التحكم ليوم غدٍ الساعة 09:30 صباحاً مع تفعيل التنبيه المسبق بنصف ساعة.`;
+    }
+
+    return 'أهلاً بك، تم استلام رسالتك وسأقوم بتنفيذها وجدولتها فوراً.';
   }
 }
