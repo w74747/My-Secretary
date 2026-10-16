@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>لوحة تحكم السكرتير الذكي</title>
+  <!-- مكتبة التنسيق والأيقونات -->
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -29,7 +30,7 @@
       <div class="flex items-center gap-3">
         <div class="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
           <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>الواتساب متصل ومفعل</span>
+          <span>واتساب متصل ومفعل</span>
         </div>
         <button onclick="disconnectWhatsApp()" class="px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-xl transition flex items-center gap-1.5">
           <i class="fa-solid fa-arrow-right-from-bracket"></i>
@@ -42,7 +43,7 @@
   <!-- المحتوى الرئيسي -->
   <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
-    <!-- الإحصائيات -->
+    <!-- الإحصائيات العامة -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
         <div>
@@ -88,12 +89,12 @@
     <!-- شريط التحكم وزر الإضافة -->
     <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
       <div>
-        <h2 class="text-xl font-extrabold text-slate-900">لوحة تتبع المهام (Kanban)</h2>
-        <p class="text-xs text-slate-500 mt-0.5">لوحة مرئية لتوزيع ومتابعة دورة حياة المهام</p>
+        <h2 class="text-xl font-extrabold text-slate-900">لوحة تتبع المهام المرئية</h2>
+        <p class="text-xs text-slate-500 mt-0.5">لوحة ذكية لعرض ومتابعة مراحل إنجاز الأعمال لحظة بلحظة</p>
       </div>
       <div class="flex items-center gap-2 w-full sm:w-auto">
         <button onclick="loadTasks()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-xl transition flex items-center gap-2">
-          <i class="fa-solid fa-rotate-right"></i> تحديث
+          <i class="fa-solid fa-rotate-right"></i> تحديث اللوحة
         </button>
         <button onclick="openAddTaskModal()" class="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold rounded-xl shadow-md transition flex items-center gap-2">
           <i class="fa-solid fa-plus"></i> مهمة جديدة
@@ -101,21 +102,21 @@
       </div>
     </div>
 
-    <!-- أعمدة الكانبان -->
+    <!-- أعمدة مراحل العمل -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
       
-      <!-- الانتظار -->
+      <!-- العمود الأول: قيد الانتظار -->
       <div class="bg-slate-100/70 p-4 rounded-2xl border border-slate-200 flex flex-col">
         <div class="flex items-center justify-between mb-4">
           <span class="font-bold text-slate-700 flex items-center gap-2">
-            <span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span> الانتظار
+            <span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span> في الانتظار
           </span>
           <span id="countTodo" class="text-xs font-bold bg-white text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">0</span>
         </div>
         <div id="colTodo" class="space-y-3 flex-1 overflow-y-auto max-h-[600px]"></div>
       </div>
 
-      <!-- جاري التنفيذ -->
+      <!-- العمود الثاني: جاري العمل -->
       <div class="bg-slate-100/70 p-4 rounded-2xl border border-slate-200 flex flex-col">
         <div class="flex items-center justify-between mb-4">
           <span class="font-bold text-slate-700 flex items-center gap-2">
@@ -126,7 +127,7 @@
         <div id="colInProgress" class="space-y-3 flex-1 overflow-y-auto max-h-[600px]"></div>
       </div>
 
-      <!-- المكتملة -->
+      <!-- العمود الثالث: منجزة -->
       <div class="bg-slate-100/70 p-4 rounded-2xl border border-slate-200 flex flex-col">
         <div class="flex items-center justify-between mb-4">
           <span class="font-bold text-slate-700 flex items-center gap-2">
@@ -140,7 +141,7 @@
     </div>
   </main>
 
-  <!-- نافذة إضافة مهمة مع الوقت والشخص المسؤول -->
+  <!-- نافذة إضافة مهمة جديدة -->
   <div id="taskModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
     <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100">
       <div class="flex items-center justify-between mb-4">
@@ -150,15 +151,15 @@
       <form id="createTaskForm" onsubmit="handleCreateTask(event)" class="space-y-4">
         <div>
           <label class="block text-xs font-semibold text-slate-600 mb-1">عنوان المهمة *</label>
-          <input type="text" id="taskTitleInput" required class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none" placeholder="مثال: تسليم عينة The Ribs">
+          <input type="text" id="taskTitleInput" required class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none" placeholder="مثال: تسليم عينات اللحوم والتأكيد على المورد">
         </div>
         
         <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">تفاصيل المهمة</label>
-          <textarea id="taskDescInput" rows="2" class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none" placeholder="تفاصيل وملاحظات المهمة..."></textarea>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">تفاصيل وملاحظات المهمة</label>
+          <textarea id="taskDescInput" rows="2" class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none" placeholder="اكتب التعليمات أو الملاحظات المطلوبة هنا..."></textarea>
         </div>
 
-        <!-- حقول الشخص المسؤول -->
+        <!-- حقول المسؤول -->
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-xs font-semibold text-slate-600 mb-1">الشخص المسؤول (المكلف)</label>
@@ -170,27 +171,26 @@
           </div>
         </div>
 
-        <!-- حقول الوقت والأولوية -->
+        <!-- التاريخ والوقت والأولوية -->
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-xs font-semibold text-slate-600 mb-1">تاريخ ووقت التسليم المحدد *</label>
-            <!-- يقبل اليوم والساعة والدقيقة -->
             <input type="datetime-local" id="taskDueDateInput" required class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none">
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">الأولوية</label>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">درجة الأهمية</label>
             <select id="taskPriorityInput" class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none">
               <option value="LOW">منخفضة</option>
               <option value="MEDIUM" selected>متوسطة</option>
               <option value="HIGH">مرتفعة</option>
-              <option value="URGENT">عاجل 🚨</option>
+              <option value="URGENT">عاجلة جداً 🚨</option>
             </select>
           </div>
         </div>
 
         <div class="pt-2 flex items-center justify-end gap-2">
           <button type="button" onclick="closeAddTaskModal()" class="px-4 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100 rounded-xl">إلغاء</button>
-          <button type="submit" class="px-5 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow">حفظ وإرسال إشعار</button>
+          <button type="submit" class="px-5 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow">حفظ وإرسال التنبيه</button>
         </div>
       </form>
     </div>
@@ -229,11 +229,10 @@
             LOW: 'منخفضة',
             MEDIUM: 'متوسطة',
             HIGH: 'مرتفعة',
-            URGENT: 'عاجل 🚨'
+            URGENT: 'عاجلة جداً 🚨'
           };
 
-          // تنسيق الوقت مع التاريخ
-          let formattedDateTime = 'بدون موعد';
+          let formattedDateTime = 'بدون موعد تسليم';
           if (task.dueDate) {
             const d = new Date(task.dueDate);
             formattedDateTime = d.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
@@ -249,7 +248,6 @@
 
             ${task.description ? `<p class="text-xs text-slate-500 line-clamp-2">${task.description}</p>` : ''}
 
-            <!-- عرض المسؤول إن وجد -->
             ${task.assignee ? `
               <div class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200/60 text-[11px] text-slate-600">
                 <i class="fa-regular fa-user text-slate-400"></i>
@@ -342,7 +340,7 @@
     }
 
     async function disconnectWhatsApp() {
-      if (!confirm('هل تريد إنهاء جلسة الواتساب الحالية ومسح كود QR جديد؟')) return;
+      if (!confirm('هل تريد إنهاء جلسة الواتساب الحالية ومسح كود جديد؟')) return;
       try {
         await fetch('/api/whatsapp/logout', { method: 'POST' });
         window.location.reload();
