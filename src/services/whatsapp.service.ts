@@ -126,85 +126,109 @@ class WhatsAppService {
       if (type !== 'notify') return;
 
       for (const msg of messages) {
+        // تجاهل الرسائل الصادرة من البوت نفسه
         if (msg.key.fromMe) continue;
 
         const senderJid = msg.key.remoteJid;
 
-        // تجاهل قنوات الأخبار والحالات
+        // 1. تجاهل القنوات والحالات والمجموعات
         if (
           !senderJid ||
           senderJid.endsWith('@newsletter') ||
           senderJid === 'status@broadcast' ||
-          senderJid.endsWith('@broadcast')
+          senderJid.endsWith('@broadcast') ||
+          senderJid.endsWith('@g.us')
         ) {
           continue;
         }
 
-        const text =
+        const rawText =
           msg.message?.conversation ||
           msg.message?.extendedTextMessage?.text ||
           msg.message?.imageMessage?.caption ||
           msg.message?.videoMessage?.caption;
 
-        if (!text || text.trim() === '') continue;
+        if (!rawText || rawText.trim() === '') continue;
 
-        const cleanText = text.trim();
-        console.log(`📩 رسالة واردة من [${senderJid}]: ${cleanText}`);
+        const cleanText = rawText.trim();
+        const senderDigits = senderJid.replace(/\D/g, '');
+        const ownerPhone = (process.env.OWNER_PHONE || '').replace(/\D/g, '');
 
-        try {
-          // فحص هل المرسل مكلّف بمهمة ويرد بإنجازها (مثل "تم"، "خلصت"، "أنجزت")
-          const isDoneReply = /^(تم|خلصت|أنجزت|انجزت|جاهز|سويتها|تمت)\b/i.test(cleanText);
-          const senderCleanPhone = senderJid.replace(/\D/g, '');
+        // مقارنة آخر 8 أرقام لتجنب الفوارق في كود الدولة (+968)
+        const senderLast8 = senderDigits.slice(-8);
+        const isOwner = ownerPhone ? senderDigits.includes(ownerPhone.slice(-8)) : false;
 
-          const assignedTask = await prisma.task.findFirst({
-            where: {
-              status: { not: 'DONE' },
-              assignee: {
-                phoneNumber: { contains: senderCleanPhone.slice(-8) },
-              },
+        // 2. البحث عن مهمة نشطة معلقة تخص هذا الرقم إن كان شخصاً مكلفاً
+        const assignedTask = await prisma.task.findFirst({
+          where: {
+            status: { not: 'DONE' },
+            assignee: {
+              phoneNumber: { contains: senderLast8 },
             },
-            include: { assignee: true },
-          });
+          },
+          include: { assignee: true },
+          orderBy: { dueDate: 'asc' },
+        });
 
-          // إذا كان مكلّفاً ويرد بـ "تم"
-          if (assignedTask && isDoneReply) {
+        // ==============================================================
+        // الحالة الأولى: المرسل هو الشخص المكلّف بالمهمة (وليس المالك)
+        // ==============================================================
+        if (assignedTask && !isOwner) {
+          // التحقق هل الرسالة إفادة إنجاز صريحة فقط
+          const isExplicitDone = /^(تم|تمت|خلصت|أنجزت|انجزت|سويتها|سويت المطلوب|جاهز)\b/i.test(cleanText);
+
+          if (isExplicitDone) {
             await prisma.task.update({
               where: { id: assignedTask.id },
               data: { status: 'DONE', progress: 100 },
             });
 
             await this.sock?.sendMessage(senderJid, {
-              text: 'يعطيك العافية، تم تحديث حالة المهمة كـ مكتملة في النظام.',
+              text: 'يعطيك العافية، تم تسجيل إنجاز المهمة وإبلاغ المدير.',
             }, { quoted: msg });
 
-            // إشعار المدير بإتمام المهمة
-            const ownerPhone = process.env.OWNER_PHONE;
             if (ownerPhone) {
               await this.sendMessage(
                 ownerPhone,
-                `✅ أفاد المكلف *${assignedTask.assignee?.name || ''}* بإنجاز المهمة:\n📌 ${assignedTask.title}`
+                `✅ تم إنجاز المهمة من قبل *${assignedTask.assignee?.name}*:\n📌 ${assignedTask.title}`
               );
             }
-            continue;
+          } else {
+            // محادثة عادية من المكلف (مثل: "ياخه كيف" أو أي كلام عادي) -> تجاهل تام وبصمت
+            console.log(`ℹ️ تم تجاهل رسالة عادية من المكلّف [${assignedTask.assignee?.name}]: "${cleanText}"`);
           }
+          continue;
+        }
 
-          // فحص هل الرسالة تحتوي على أمر لإنشاء مهمة أو استعلام جدول
-          const hasTaskIntent = /(?:مهمه|مهمة|ذكر|ذَكِّر|ذكرني|سجل|أضف|اضف|كلف|كلّف|بلغ|بلّغ|أخبر|اخبر|خبر|قل لـ?|قول لـ?|خلي|خلّي|وصي|وصّي|ارسل لـ?|أرسل لـ?|ايش عندي|شو عندي|جدول)/i.test(cleanText);
+        // ==============================================================
+        // الحالة الثانية: المرسل شخص آخر غير المالك وغير مكلف بمهمة
+        // ==============================================================
+        if (!isOwner && ownerPhone) {
+          console.log(`ℹ️ تم تجاهل رسالة من جهة اتصال شخصية [${senderDigits}]: "${cleanText}"`);
+          continue;
+        }
 
-          // إذا لم تكن هناك نية مهمة وكانت دردشة عادية من شخص آخر، نتجاهلها لعدم إحراج المستخدم
-          if (!hasTaskIntent) {
-            console.log(`ℹ️ تم تجاهل الرد الآلي لأن الرسالة دردشة شخصية عادية وليست أمراً: [${cleanText}]`);
-            continue;
-          }
+        // ==============================================================
+        // الحالة الثالثة: الرسالة مرسلة منك (المالك)
+        // ==============================================================
+        // التحقق من وجود أمر مهمة أو استعلام جدول
+        const hasTaskIntent = /^(مهمه|مهمة|ذكر|ذَكِّر|ذكرني|سجل|أضف|اضف|كلف|كلّف|بلغ|بلّغ|أخبر|اخبر|خبر|قل لـ?|قول لـ?|خلي|خلّي|وصي|وصّي|ارسل لـ?|أرسل لـ?|ايش عندي|شو عندي|جدولي|جدول المهام|المهام|تحديث المهمة)/i.test(cleanText);
 
-          // معالجة المهمة
+        if (!hasTaskIntent) {
+          // محادثة عادية ترسلها أو تتلقاها ولا علاقة لها بالمهام -> تجاهل تام وبصمت
+          console.log(`ℹ️ تم تجاهل رسالة عادية لا تحتوي على أمر مهمة: "${cleanText}"`);
+          continue;
+        }
+
+        // معالجة المهمة بواسطة محرك الذكاء الاصطناعي
+        console.log(`🎯 جاري معالجة أمر مهمة صريح: "${cleanText}"`);
+        try {
           const replyText = await processUserMessage(senderJid, cleanText);
-
           if (replyText && this.sock) {
             await this.sock.sendMessage(senderJid, { text: replyText }, { quoted: msg });
           }
         } catch (err) {
-          console.error('خطأ أثناء معالجة رسالة المستخدم:', err);
+          console.error('خطأ أثناء معالجة رسالة المهمة:', err);
         }
       }
     });
