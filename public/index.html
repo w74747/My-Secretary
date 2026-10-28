@@ -5,13 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>السكرتير التنفيذي الذكي | Personal OS</title>
   
-  <!-- إعدادات PWA للهواتف -->
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#4338CA" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-  <!-- Tailwind CSS & الخطوط -->
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -26,7 +24,7 @@
 </head>
 <body class="bg-[#F5F6FA] text-[#1E293B] antialiased h-screen overflow-hidden flex flex-col md:flex-row">
 
-  <!-- الشريط الجانبي في شاشات الكمبيوتر (Desktop Sidebar) -->
+  <!-- الشريط الجانبي (Desktop Sidebar) -->
   <aside class="hidden md:flex w-16 bg-[#4338CA] flex-col items-center py-6 gap-6 text-white/70 select-none z-20 shadow-lg">
     <div class="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center text-white font-extrabold text-lg shadow-inner">
       س
@@ -49,10 +47,10 @@
     </div>
   </aside>
 
-  <!-- مساحة المحتوى الرئيسية -->
+  <!-- مساحة المحتوى -->
   <div class="flex-1 flex flex-col h-full overflow-hidden">
     
-    <!-- رأس الصفحة العلوي (متجاوب) -->
+    <!-- رأس الصفحة -->
     <header class="bg-white/90 backdrop-blur-md border-b border-slate-100 px-4 md:px-8 py-4 flex justify-between items-center z-10">
       <div>
         <h1 class="text-base md:text-xl font-bold text-[#1E293B]">السكرتير التنفيذي الذكي</h1>
@@ -60,7 +58,6 @@
       </div>
 
       <div class="flex items-center gap-2 md:gap-4">
-        <!-- شارة الاتصال -->
         <div id="wa-status-badge" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
           <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
           <span>جاري الفحص...</span>
@@ -68,13 +65,11 @@
       </div>
     </header>
 
-    <!-- منطقة عرض التبويبات -->
+    <!-- منطقة التبويبات -->
     <main class="flex-1 overflow-x-auto overflow-y-auto p-4 md:p-8 pb-20 md:pb-8">
       
-      <!-- 1. تبويب لوحة الكانبان -->
+      <!-- 1. لوحة المهام (Kanban) -->
       <div id="view-kanban" class="flex flex-col md:flex-row gap-6 h-full items-start">
-        
-        <!-- في الانتظار -->
         <div class="w-full md:w-80 flex flex-col max-h-full">
           <div class="flex items-center justify-between mb-3 px-2">
             <div class="flex items-center gap-2">
@@ -86,7 +81,6 @@
           <div id="col-todo" class="flex flex-col gap-3.5"></div>
         </div>
 
-        <!-- جاري التنفيذ -->
         <div class="w-full md:w-80 flex flex-col max-h-full">
           <div class="flex items-center justify-between mb-3 px-2">
             <div class="flex items-center gap-2">
@@ -98,7 +92,6 @@
           <div id="col-inprogress" class="flex flex-col gap-3.5"></div>
         </div>
 
-        <!-- المكتملة -->
         <div class="w-full md:w-80 flex flex-col max-h-full">
           <div class="flex items-center justify-between mb-3 px-2">
             <div class="flex items-center gap-2">
@@ -109,28 +102,61 @@
           </div>
           <div id="col-done" class="flex flex-col gap-3.5"></div>
         </div>
-
       </div>
 
-      <!-- 2. تبويب العادات والمكافآت -->
+      <!-- 2. تبويب العادات ونظام النقاط والمكافآت -->
       <div id="view-habits" class="hidden flex flex-col gap-6 max-w-4xl mx-auto">
-        <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
-          <h2 class="text-base font-bold text-[#1E293B] mb-2">العادات اليومية ونظام النقاط</h2>
-          <p class="text-xs text-[#64748B]">تتبع الورد القرآني، الصلوات، التمارين، والمكافآت المستحقة.</p>
+        
+        <!-- بطاقات الرصيد وسوق المكافآت -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col justify-between">
+            <span class="text-xs font-semibold text-[#64748B]">رصيد نقاط الالتزام</span>
+            <div class="flex items-baseline gap-2 mt-2">
+              <span class="text-3xl font-extrabold text-[#4338CA]" id="points-balance">0</span>
+              <span class="text-xs text-slate-400">نقطة</span>
+            </div>
+            <p class="text-[11px] text-emerald-600 mt-2 font-medium">كل عادة تنجزها تمنحك نقاطاً حقيقية!</p>
+          </div>
+
+          <div class="md:col-span-2 bg-gradient-to-r from-indigo-50 to-purple-50 p-6 rounded-3xl border border-indigo-100 flex items-center justify-between">
+            <div>
+              <h3 class="font-bold text-sm text-[#1E293B]">سوق المكافآت المقننة 🍫</h3>
+              <p class="text-xs text-[#64748B] mt-1">كافئ نفسك بآيسكريم أو شوكولاتة فقط عند الوصول للهدف.</p>
+            </div>
+            <button onclick="openRewardsModal()" class="px-5 py-2.5 bg-[#4338CA] text-white text-xs font-semibold rounded-2xl shadow-sm hover:opacity-90 transition">
+              استبدال المكافآت
+            </button>
+          </div>
         </div>
+
+        <!-- قائمة العادات اليومية -->
+        <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="font-bold text-sm text-[#1E293B]">الورد اليومي والعادات</h3>
+              <p class="text-[11px] text-[#64748B]">اضغط على الدائرة لتسجيل الإنجاز وكسب النقاط</p>
+            </div>
+            <span class="text-xs px-2.5 py-1 bg-slate-100 text-slate-600 rounded-full font-medium">اليوم</span>
+          </div>
+          
+          <div id="habits-list" class="flex flex-col gap-3">
+            <div class="text-center py-6 text-xs text-slate-400">جاري تحميل العادات...</div>
+          </div>
+        </div>
+
       </div>
 
-      <!-- 3. تبويب فريق الوكلاء الذكي -->
+      <!-- 3. تبويب فريق الوكلاء -->
       <div id="view-agents" class="hidden flex flex-col gap-6 max-w-4xl mx-auto">
         <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
           <h2 class="text-base font-bold text-[#1E293B] mb-2">إدارة فريق الوكلاء الذكي</h2>
-          <p class="text-xs text-[#64748B]">تخصيص وكيل البحث، المدير المالي، وسكرتير المواعيد ومفاتيح الربط.</p>
+          <p class="text-xs text-[#64748B]">جاهز لربط وكيل البحث وتحليل السوق والمدير المالي في المرحلة التالية.</p>
         </div>
       </div>
 
     </main>
 
-    <!-- شريط التنقل السفلي في شاشات الجوال (Mobile Bottom Nav) -->
+    <!-- شريط التنقل السفلي للهواتف -->
     <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-100 py-2.5 px-6 flex justify-around items-center z-20">
       <button onclick="switchTab('kanban')" id="mob-btn-kanban" class="flex flex-col items-center gap-1 text-[#4338CA]">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
@@ -148,13 +174,26 @@
 
   </div>
 
-  <!-- سكريبت التشغيل والتفاعل -->
+  <!-- نافذة استبدال المكافآت المنبثقة -->
+  <div id="rewards-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 max-w-md w-full flex flex-col gap-4">
+      <div class="flex justify-between items-center">
+        <h3 class="font-bold text-base text-[#1E293B]">سوق المكافآت المستحقة</h3>
+        <button onclick="closeRewardsModal()" class="text-slate-400 hover:text-slate-600 text-sm">✕</button>
+      </div>
+      <div id="rewards-list" class="flex flex-col gap-3 max-h-72 overflow-y-auto pr-1">
+        <!-- المكافآت تضاف برمجياً -->
+      </div>
+    </div>
+  </div>
+
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(err => console.error('SW Error:', err));
     }
 
     let currentTasks = [];
+    let userPoints = 0;
 
     function switchTab(tab) {
       ['kanban', 'habits', 'agents'].forEach(t => {
@@ -170,6 +209,10 @@
       const activeSide = document.getElementById(`side-btn-${tab}`);
       if (activeMob) activeMob.className = 'flex flex-col items-center gap-1 text-[#4338CA]';
       if (activeSide) activeSide.className = 'p-3 rounded-2xl bg-white/20 text-white transition shadow-sm';
+
+      if (tab === 'habits') {
+        fetchHabits();
+      }
     }
 
     async function checkWhatsAppStatus() {
@@ -272,6 +315,106 @@
         </div>
       `;
       return card;
+    }
+
+    // ==========================================
+    // جلب ومعالجة العادات والمكافآت
+    // ==========================================
+    async function fetchHabits() {
+      try {
+        const res = await fetch('/api/habits');
+        const data = await res.json();
+        userPoints = data.pointsBalance || 0;
+        document.getElementById('points-balance').textContent = userPoints;
+
+        const list = document.getElementById('habits-list');
+        list.innerHTML = '';
+
+        data.habits.forEach(habit => {
+          const isDoneToday = habit.logs && habit.logs.length > 0;
+          const el = document.createElement('div');
+          el.className = `p-4 rounded-2xl border transition flex items-center justify-between cursor-pointer ${
+            isDoneToday ? 'bg-emerald-50/60 border-emerald-200' : 'bg-slate-50 border-slate-100 hover:bg-slate-100/60'
+          }`;
+          el.onclick = () => toggleHabit(habit.id);
+
+          el.innerHTML = `
+            <div class="flex items-center gap-3">
+              <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center transition ${
+                isDoneToday ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-300'
+              }">
+                ${isDoneToday ? '✓' : ''}
+              </div>
+              <div>
+                <h4 class="font-bold text-xs md:text-sm text-[#1E293B] ${isDoneToday ? 'line-through text-slate-400' : ''}">${habit.title}</h4>
+                <span class="text-[10px] text-slate-400">${habit.targetCount} ${habit.unit || ''}</span>
+              </div>
+            </div>
+            <span class="text-xs font-bold ${isDoneToday ? 'text-emerald-600' : 'text-indigo-600'}">+${habit.points} ن</span>
+          `;
+          list.appendChild(el);
+        });
+      } catch (e) {
+        console.error('فشل جلب العادات:', e);
+      }
+    }
+
+    async function toggleHabit(id) {
+      try {
+        await fetch(`/api/habits/${id}/toggle`, { method: 'POST' });
+        fetchHabits();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function openRewardsModal() {
+      try {
+        const res = await fetch('/api/rewards');
+        const rewards = await res.json();
+        const list = document.getElementById('rewards-list');
+        list.innerHTML = '';
+
+        rewards.forEach(r => {
+          const canAfford = userPoints >= r.costPoints && !r.isClaimed;
+          const el = document.createElement('div');
+          el.className = 'p-3 rounded-2xl border border-slate-100 flex items-center justify-between bg-slate-50';
+          el.innerHTML = `
+            <div>
+              <h4 class="font-bold text-xs text-[#1E293B]">${r.title}</h4>
+              <span class="text-[10px] text-slate-400">${r.costPoints} نقطة مطلوب</span>
+            </div>
+            ${
+              r.isClaimed
+                ? '<span class="text-xs text-slate-400 font-semibold">مستبدلة ✓</span>'
+                : `<button onclick="claimReward('${r.id}')" ${!canAfford ? 'disabled' : ''} class="px-3 py-1 text-xs font-semibold rounded-xl transition ${
+                    canAfford ? 'bg-[#4338CA] text-white hover:opacity-90' : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                  }">فتح</button>`
+            }
+          `;
+          list.appendChild(el);
+        });
+
+        document.getElementById('rewards-modal').classList.remove('hidden');
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function closeRewardsModal() {
+      document.getElementById('rewards-modal').classList.add('hidden');
+    }
+
+    async function claimReward(id) {
+      try {
+        const res = await fetch(`/api/rewards/${id}/claim`, { method: 'POST' });
+        const data = await res.json();
+        alert(data.message || 'تم فتح المكافأة بنجاح!');
+        closeRewardsModal();
+        fetchHabits();
+      } catch (e) {
+        console.error(e);
+      }
     }
 
     async function deleteTask(id) {
