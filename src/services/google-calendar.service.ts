@@ -7,7 +7,7 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_REDIRECT_URI || 'https://my-secretary.up.railway.app/api/auth/google/callback'
 );
 
-// 1. توليد رابط تفويض الدخول لتقويم جوجل فقط
+// 1. توليد رابط تفويض الدخول لتقويم جوجل
 export function getGoogleAuthUrl(): string {
   const scopes = [
     'https://www.googleapis.com/auth/calendar.events',
@@ -20,7 +20,7 @@ export function getGoogleAuthUrl(): string {
   });
 }
 
-// 2. حفظ رموز المصادقة بعد موافقة المستخدم
+// 2. حفظ رموز المصادقة
 export async function saveGoogleTokensFromCode(code: string): Promise<void> {
   const { tokens } = await oauth2Client.getToken(code);
   if (!tokens.access_token) throw new Error('فشل جلب الرمز المميز');
@@ -51,7 +51,7 @@ async function getAuthenticatedCalendar() {
 
   oauth2Client.setCredentials({
     access_token: authRecord.accessToken,
-    refreshToken: authRecord.refreshToken,
+    refresh_token: authRecord.refreshToken || undefined,
   });
 
   return google.calendar({ version: 'v3', auth: oauth2Client });
@@ -70,7 +70,7 @@ export async function syncTaskToGoogleCalendar(task: {
     if (!calendar) return null;
 
     const startDate = new Date(task.dueDate);
-    const endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // مدة افتراضية ساعة واحدة
+    const endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
 
     const res = await calendar.events.insert({
       calendarId: 'primary',
