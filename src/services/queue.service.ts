@@ -3,18 +3,16 @@ import IORedis from 'ioredis';
 import { prisma } from '../lib/prisma';
 import { whatsappService } from './whatsapp.service';
 
-// Railway يقوم تلقائياً بحقن متغير REDIS_URL
 const redisConnection = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
   maxRetriesPerRequest: null,
 });
 
 export const REMINDER_QUEUE_NAME = 'whatsapp-reminders';
 
-// 1. إنشاء طابور التذكيرات
 export const reminderQueue = new Queue(REMINDER_QUEUE_NAME, {
   connection: redisConnection,
   defaultJobOptions: {
-    attempts: 3, // إعادة المحاولة 3 مرات في حال انقطاع الاتصال
+    attempts: 3,
     backoff: {
       type: 'exponential',
       delay: 5000,
@@ -24,7 +22,6 @@ export const reminderQueue = new Queue(REMINDER_QUEUE_NAME, {
   },
 });
 
-// 2. دالة جدولة مهمة في Redis
 export async function scheduleTaskReminder(task: {
   id: string;
   title: string;
@@ -38,9 +35,7 @@ export async function scheduleTaskReminder(task: {
   const targetTimestamp = dueTime - offsetMs;
   const delay = targetTimestamp - Date.now();
 
-  // إذا كان وقت التذكير لم يفت بعد
   if (delay > 0) {
-    // نستخدم taskId كمعرف لمنع تكرار الجدولة
     await reminderQueue.add(
       'send-reminder',
       { taskId: task.id },
@@ -53,7 +48,6 @@ export async function scheduleTaskReminder(task: {
   }
 }
 
-// 3. دالة إلغاء تذكير من Redis (عند اكتمال المهمة أو حذفها)
 export async function cancelTaskReminder(taskId: string) {
   try {
     const job = await reminderQueue.getJob(`reminder-${taskId}`);
@@ -66,7 +60,6 @@ export async function cancelTaskReminder(taskId: string) {
   }
 }
 
-// 4. تشغيل العامل (Worker) لمعالجة التنبيهات في وقت استحقاقها
 export function initReminderWorker() {
   const worker = new Worker(
     REMINDER_QUEUE_NAME,
@@ -79,13 +72,12 @@ export function initReminderWorker() {
         include: { assignee: true },
       });
 
-      // إذا حُذفت المهمة أو أُنجزت أو أُرسل التنبيه مسبقاً، نتخطى
       if (!task || task.status === 'DONE' || task.lastReminderSent || !task.dueDate) {
         return;
       }
 
       if (!whatsappService.isConnected) {
-        throw new Error('خدمة الواتساب غير متصلة حالياً، سيتم إعادة المحاولة تلقائياً.');
+        throw new Error('خدمة الواتساب غير متصلة حالياً، ستتم إعادة المحاولة تلقائياً.');
       }
 
       // تنسيق التوقيت لسلطنة عُمان والخليج (UTC+4)
@@ -101,7 +93,7 @@ export function initReminderWorker() {
       const isToday = nowOman.getUTCDate() === taskOman.getUTCDate();
       const dayText = isToday ? 'اليوم' : 'غداً';
 
-      // أ. إذا كانت موجهة لشخص مكلّف
+      // إرسال تنبيه مخصص للمكلف بالصيغة المباشرة
       if (task.assignee && task.assignee.phoneNumber) {
         let actionText = task.title
           .replace(/\b(?:اليوم|بكره|غدا|غداً|الساعه|الساعة)\b/gi, '')
@@ -122,9 +114,8 @@ export function initReminderWorker() {
         const assigneeMsg = `مرحباً،\nلطفاً ${actionText} ${dayText} الساعة ${timeFormatted}.`;
         await whatsappService.sendMessage(task.assignee.phoneNumber, assigneeMsg);
         console.log(`🔔 [BullMQ] تم إرسال تنبيه للمكلف [${task.assignee.name}] (${task.assignee.phoneNumber})`);
-      }
-      // ب. إذا كانت تذكيراً شخصياً للمالك
-      else {
+      } else {
+        // تذكير المالك
         const ownerPhone = process.env.OWNER_PHONE;
         if (ownerPhone) {
           const ownerMsg = `⏰ تذكير بموعد: ${task.title} (${dayText} الساعة ${timeFormatted}).`;
@@ -133,7 +124,6 @@ export function initReminderWorker() {
         }
       }
 
-      // تحديث حالة إرسال التنبيه في قاعدة البيانات
       await prisma.task.update({
         where: { id: task.id },
         data: { lastReminderSent: new Date() },
@@ -149,7 +139,6 @@ export function initReminderWorker() {
   console.log('⚡ تم تشغيل مشغّل طوابير Redis (BullMQ Worker) بنجاح.');
 }
 
-// مزامنة المواعيد القادمة من قاعدة البيانات عند إعادة تشغيل السيرفر
 export async function syncUpcomingReminders() {
   const pendingTasks = await prisma.task.findMany({
     where: {
