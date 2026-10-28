@@ -67,14 +67,14 @@
       </div>
 
       <div class="flex items-center gap-2 md:gap-3">
-        <!-- زر إضافة مهمة جديدة مفعّل بالكامل -->
+        <!-- زر إضافة مهمة جديدة -->
         <button onclick="openNewTaskModal()" class="bg-[#1E293B] hover:bg-slate-800 text-white px-3.5 py-1.5 rounded-2xl text-xs font-semibold shadow-sm transition flex items-center gap-1">
           <span>+ إضافة مهمة جديدة</span>
         </button>
 
-        <!-- زر نسخ رابط التقويم للهاتف -->
-        <button onclick="copyCalendarFeed()" class="hidden sm:flex px-3 py-1.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition items-center gap-1">
-          <span>📅 ربط التقويم</span>
+        <!-- زر تفويض Google Calendar المنبثق -->
+        <button onclick="openGoogleCalendarAuth()" class="hidden sm:flex px-3.5 py-1.5 rounded-2xl text-[11px] font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition items-center gap-1.5 border border-indigo-100">
+          <span>📅 ربط تقويم Google</span>
         </button>
 
         <!-- حالة اتصال واتساب -->
@@ -290,7 +290,6 @@
     let userPoints = 0;
     let mindmapNetwork = null;
 
-    // دالة التبديل بين التبويبات وتفعيل الأزرار
     function switchTab(tab) {
       ['kanban', 'habits', 'mindmap', 'agents'].forEach(t => {
         const view = document.getElementById(`view-${t}`);
@@ -416,7 +415,6 @@
       return card;
     }
 
-    // دوال نافذة إضافة مهمة جديدة
     function openNewTaskModal() {
       document.getElementById('new-task-modal').classList.remove('hidden');
     }
@@ -449,7 +447,6 @@
       }
     }
 
-    // دوال العادات والمكافآت
     async function fetchHabits() {
       try {
         const res = await fetch('/api/habits');
@@ -547,7 +544,6 @@
       }
     }
 
-    // دوال خريطة الأفكار
     async function fetchMindMap() {
       try {
         const res = await fetch('/api/mindmap');
@@ -581,16 +577,21 @@
       }
     }
 
-    function copyCalendarFeed() {
-      const feedUrl = `${window.location.origin}/api/calendar.ics`;
-      navigator.clipboard.writeText(feedUrl).then(() => {
-        alert(`تم نسخ رابط اشتراك التقويم بنجاح:\n${feedUrl}\n\nيمكنك الآن إضافته إلى تقويم هاتفك (Add Subscribed Calendar).`);
-      }).catch(() => {
-        prompt('انسخ رابط اشتراك التقويم التالي وأضفه إلى هاتفك:', feedUrl);
-      });
+    // نافذة ربط Google Calendar المنبثقة
+    function openGoogleCalendarAuth() {
+      const authUrl = '/api/auth/google';
+      const width = 500;
+      const height = 650;
+      const left = window.screen.width / 2 - width / 2;
+      const top = window.screen.height / 2 - height / 2;
+
+      window.open(
+        authUrl,
+        'Google Auth',
+        `width=${width},height=${height},top=${top},left=${left}`
+      );
     }
 
-    // دوال إدارة فريق الوكلاء
     let cachedAgents = [];
 
     async function fetchAgents() {
