@@ -44,7 +44,7 @@ app.listen(PORT, async () => {
     console.log('🔄 جاري تشغيل ومزامنة خدمة واتساب...');
     await whatsappService.init();
 
-    // تشغيل نظام طابور التنبيهات عبر Redis
+    // تشغيل نظام طابور التنبيهات عبر Redis ومزامنة التذكيرات القادمة
     initReminderWorker();
     await syncUpcomingReminders();
   } catch (error) {
