@@ -72,16 +72,16 @@
           <span>+ إضافة مهمة جديدة</span>
         </button>
 
-        <!-- زر تفويض Google Calendar المنبثق -->
+        <!-- زر تفويض Google Calendar -->
         <button onclick="openGoogleCalendarAuth()" class="hidden sm:flex px-3.5 py-1.5 rounded-2xl text-[11px] font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition items-center gap-1.5 border border-indigo-100">
           <span>📅 ربط تقويم Google</span>
         </button>
 
-        <!-- حالة اتصال واتساب -->
-        <div id="wa-status-badge" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+        <!-- شارة اتصال واتساب (قابلة للنقر لعرض QR) -->
+        <button onclick="openWhatsAppModal()" id="wa-status-badge" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 cursor-pointer hover:bg-amber-100 transition">
           <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
           <span>جاري الفحص...</span>
-        </div>
+        </button>
       </div>
     </header>
 
@@ -90,8 +90,6 @@
       
       <!-- تبويب 1: لوحة المهام (Kanban) -->
       <div id="view-kanban" class="flex flex-col md:flex-row gap-6 h-full items-start">
-        
-        <!-- في الانتظار -->
         <div class="w-full md:w-80 min-w-[19rem] flex flex-col max-h-full">
           <div class="flex items-center justify-between mb-3 px-2">
             <div class="flex items-center gap-2">
@@ -103,7 +101,6 @@
           <div id="col-todo" class="flex flex-col gap-3.5"></div>
         </div>
 
-        <!-- جاري التنفيذ -->
         <div class="w-full md:w-80 min-w-[19rem] flex flex-col max-h-full">
           <div class="flex items-center justify-between mb-3 px-2">
             <div class="flex items-center gap-2">
@@ -115,7 +112,6 @@
           <div id="col-inprogress" class="flex flex-col gap-3.5"></div>
         </div>
 
-        <!-- المكتملة -->
         <div class="w-full md:w-80 min-w-[19rem] flex flex-col max-h-full">
           <div class="flex items-center justify-between mb-3 px-2">
             <div class="flex items-center gap-2">
@@ -126,10 +122,9 @@
           </div>
           <div id="col-done" class="flex flex-col gap-3.5"></div>
         </div>
-
       </div>
 
-      <!-- تبويب 2: العادات والمكافآت (Habits & Gamification) -->
+      <!-- تبويب 2: العادات والمكافآت -->
       <div id="view-habits" class="hidden flex flex-col gap-6 max-w-4xl mx-auto">
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col justify-between">
@@ -164,7 +159,7 @@
         </div>
       </div>
 
-      <!-- تبويب 3: خريطة الأفكار والعلاقات (Mind Map) -->
+      <!-- تبويب 3: خريطة الأفكار -->
       <div id="view-mindmap" class="hidden flex flex-col gap-4 h-full max-w-5xl mx-auto">
         <div class="bg-white p-5 rounded-3xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex justify-between items-center">
           <div>
@@ -178,24 +173,22 @@
         <div id="mindmap-container" class="flex-1 min-h-[460px] bg-white rounded-3xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.03)] overflow-hidden"></div>
       </div>
 
-      <!-- تبويب 4: فريق الوكلاء الذكي (Multi-Agent Team) -->
+      <!-- تبويب 4: فريق الوكلاء الذكي -->
       <div id="view-agents" class="hidden flex flex-col gap-6 max-w-4xl mx-auto">
         <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h2 class="text-base font-bold text-[#1E293B]">فريق الوكلاء التنفيذي المخصص</h2>
-            <p class="text-xs text-[#64748B] mt-1">تحديد صلاحيات كل وكيل ومفتاح الـ API الخاص به لتوزيع المهام بدقة.</p>
+            <p class="text-xs text-[#64748B] mt-1">تحديد صلاحيات كل وكيل، تعديل البرومبت الخاص به، ومفتاح الـ API.</p>
           </div>
           <span class="px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-600">3 وكلاء نشطين</span>
         </div>
 
-        <div id="agents-list" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="text-center py-6 text-xs text-slate-400 col-span-2">جاري تحميل الوكلاء...</div>
-        </div>
+        <div id="agents-list" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
       </div>
 
     </main>
 
-    <!-- شريط التنقل السفلي للهواتف (Mobile Bottom Nav) -->
+    <!-- شريط التنقل السفلي للهواتف -->
     <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-100 py-2.5 px-6 flex justify-around items-center z-20">
       <button onclick="switchTab('kanban')" id="mob-btn-kanban" class="flex flex-col items-center gap-1 text-[#4338CA]">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
@@ -214,7 +207,53 @@
         <span class="text-[10px] font-semibold">الوكلاء</span>
       </button>
     </nav>
+  </div>
 
+  <!-- نافذة ربط الواتساب وعرض QR -->
+  <div id="wa-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 max-w-sm w-full flex flex-col items-center text-center gap-4">
+      <div class="w-full flex justify-between items-center">
+        <h3 class="font-bold text-base text-[#1E293B]">ربط حساب الواتساب</h3>
+        <button onclick="closeWhatsAppModal()" class="text-slate-400 hover:text-slate-600 text-sm">✕</button>
+      </div>
+      <p class="text-xs text-slate-500">افتح تطبيق واتساب على هاتفك > الأجهزة المرتبطة > ربط جهاز، وامسح الرمز التالي:</p>
+      <div id="wa-qr-container" class="w-56 h-56 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-center p-2">
+        <span class="text-xs text-slate-400">جاري استخراج الرمز...</span>
+      </div>
+      <button onclick="logoutWhatsApp()" class="text-xs text-red-500 hover:underline">إعادة تعيين الجلسة وتوليد رمز جديد</button>
+    </div>
+  </div>
+
+  <!-- نافذة تعديل إعدادات وبرومبت الوكيل -->
+  <div id="agent-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 max-w-lg w-full flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center">
+        <h3 class="font-bold text-base text-[#1E293B]" id="modal-agent-name">إعدادات الوكيل</h3>
+        <button onclick="closeAgentModal()" class="text-slate-400 hover:text-slate-600 text-sm">✕</button>
+      </div>
+      <input type="hidden" id="modal-agent-id" />
+      
+      <!-- حقل البرومبت المخصص للوكيل -->
+      <div class="flex flex-col gap-1.5">
+        <label class="text-xs font-bold text-slate-700">توجيهات وبرومبت الوكيل (System Prompt):</label>
+        <p class="text-[10px] text-slate-400">اكتب هنا المهام والشخصية وطريقة الرد التي تريد من هذا الوكيل الالتزام بها بدقة.</p>
+        <textarea id="modal-agent-prompt" rows="5" class="w-full text-xs p-3 rounded-2xl border border-slate-200 outline-none focus:border-indigo-500 font-mono leading-relaxed"></textarea>
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <label class="text-xs font-bold text-slate-700">مفتاح API الخاص بالوكيل (اختياري):</label>
+        <input type="password" id="modal-agent-key" placeholder="اتركه فارغاً لاستخدام مفتاح النظام الافتراضي" class="w-full text-xs p-2.5 rounded-xl border border-slate-200 outline-none focus:border-indigo-500" />
+      </div>
+
+      <div class="flex items-center gap-2">
+        <input type="checkbox" id="modal-agent-web" class="w-4 h-4 text-indigo-600 rounded border-slate-300" />
+        <label for="modal-agent-web" class="text-xs font-semibold text-slate-700">تفعيل صلاحية البحث المباشر في الويب والشبكات</label>
+      </div>
+
+      <button onclick="saveAgentSettings()" class="w-full py-2.5 bg-[#4338CA] text-white text-xs font-semibold rounded-2xl hover:opacity-90 transition mt-2">
+        حفظ الإعدادات والبرومبت
+      </button>
+    </div>
   </div>
 
   <!-- نافذة إضافة مهمة جديدة -->
@@ -259,28 +298,6 @@
     </div>
   </div>
 
-  <!-- نافذة إعدادات الوكيل -->
-  <div id="agent-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-    <div class="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 max-w-md w-full flex flex-col gap-4">
-      <div class="flex justify-between items-center">
-        <h3 class="font-bold text-base text-[#1E293B]" id="modal-agent-name">إعدادات الوكيل</h3>
-        <button onclick="closeAgentModal()" class="text-slate-400 hover:text-slate-600 text-sm">✕</button>
-      </div>
-      <input type="hidden" id="modal-agent-id" />
-      <div class="flex flex-col gap-1.5">
-        <label class="text-xs font-semibold text-slate-700">مفتاح API الخاص بالوكيل (اختياري)</label>
-        <input type="password" id="modal-agent-key" placeholder="اتركه فارغاً لاستخدام مفتاح النظام الافتراضي" class="w-full text-xs p-2.5 rounded-xl border border-slate-200 outline-none focus:border-indigo-500" />
-      </div>
-      <div class="flex items-center gap-2">
-        <input type="checkbox" id="modal-agent-web" class="w-4 h-4 text-indigo-600 rounded border-slate-300" />
-        <label for="modal-agent-web" class="text-xs font-semibold text-slate-700">تفعيل صلاحية البحث المباشر في الويب والشبكات</label>
-      </div>
-      <button onclick="saveAgentSettings()" class="w-full py-2.5 bg-[#4338CA] text-white text-xs font-semibold rounded-xl hover:opacity-90 transition mt-2">
-        حفظ الإعدادات
-      </button>
-    </div>
-  </div>
-
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(err => console.error('SW Error:', err));
@@ -289,6 +306,7 @@
     let currentTasks = [];
     let userPoints = 0;
     let mindmapNetwork = null;
+    let latestQrCode = null;
 
     function switchTab(tab) {
       ['kanban', 'habits', 'mindmap', 'agents'].forEach(t => {
@@ -316,23 +334,41 @@
     async function checkWhatsAppStatus() {
       try {
         const res = await fetch('/api/whatsapp/status');
+        if (!res.ok) throw new Error('API Error');
         const data = await res.json();
+        latestQrCode = data.qrCode;
+
         const badge = document.getElementById('wa-status-badge');
         if (data.isConnected) {
-          badge.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-[#DCFCE7] text-[#15803D] border border-emerald-200';
-          badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500"></span><span>متصل</span>';
+          badge.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-[#DCFCE7] text-[#15803D] border border-emerald-200 cursor-pointer';
+          badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500"></span><span>واتساب متصل ✓</span>';
         } else {
-          badge.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-[#FFEDD5] text-[#C2410C] border border-amber-200';
-          badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span><span>غير متصل</span>';
+          badge.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-[#FFEDD5] text-[#C2410C] border border-amber-200 cursor-pointer animate-pulse';
+          badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-500"></span><span>غير متصل (اضغط للمسح)</span>';
         }
       } catch (err) {
-        console.error(err);
+        console.error('فشل فحص حالة الواتساب:', err);
       }
+    }
+
+    function openWhatsAppModal() {
+      const container = document.getElementById('wa-qr-container');
+      if (latestQrCode) {
+        container.innerHTML = `<img src="${latestQrCode}" class="w-full h-full object-contain" alt="QR Code" />`;
+      } else {
+        container.innerHTML = '<span class="text-xs text-slate-400">جاري انتظار الرمز أو أن الواتساب متصل بالفعل...</span>';
+      }
+      document.getElementById('wa-modal').classList.remove('hidden');
+    }
+
+    function closeWhatsAppModal() {
+      document.getElementById('wa-modal').classList.add('hidden');
     }
 
     async function fetchTasks() {
       try {
         const res = await fetch('/api/tasks');
+        if (!res.ok) return;
         currentTasks = await res.json();
         renderKanban();
       } catch (e) {
@@ -450,6 +486,7 @@
     async function fetchHabits() {
       try {
         const res = await fetch('/api/habits');
+        if (!res.ok) return;
         const data = await res.json();
         userPoints = data.pointsBalance || 0;
         document.getElementById('points-balance').textContent = userPoints;
@@ -457,7 +494,7 @@
         const list = document.getElementById('habits-list');
         list.innerHTML = '';
 
-        data.habits.forEach(habit => {
+        (data.habits || []).forEach(habit => {
           const isDoneToday = habit.logs && habit.logs.length > 0;
           const el = document.createElement('div');
           el.className = `p-4 rounded-2xl border transition flex items-center justify-between cursor-pointer ${
@@ -556,18 +593,9 @@
         };
 
         const options = {
-          physics: {
-            stabilization: false,
-            barnesHut: { springLength: 120 }
-          },
-          nodes: {
-            borderWidth: 1.5,
-            shadow: true
-          },
-          edges: {
-            color: '#CBD5E1',
-            smooth: true
-          }
+          physics: { stabilization: false, barnesHut: { springLength: 120 } },
+          nodes: { borderWidth: 1.5, shadow: true },
+          edges: { color: '#CBD5E1', smooth: true }
         };
 
         if (mindmapNetwork) mindmapNetwork.destroy();
@@ -577,7 +605,6 @@
       }
     }
 
-    // نافذة ربط Google Calendar المنبثقة
     function openGoogleCalendarAuth() {
       const authUrl = '/api/auth/google';
       const width = 500;
@@ -597,6 +624,7 @@
     async function fetchAgents() {
       try {
         const res = await fetch('/api/agents');
+        if (!res.ok) return;
         cachedAgents = await res.json();
         const container = document.getElementById('agents-list');
         container.innerHTML = '';
@@ -621,7 +649,7 @@
             <div class="pt-3 border-t border-slate-50 flex justify-between items-center">
               <span class="text-[11px] text-slate-400">${agent.canSearchWeb ? '🌐 بحث الويب مفعّل' : '🔒 بدون إنترنت'}</span>
               <button onclick="openAgentModal('${agent.id}')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-[#1E293B] text-xs font-semibold rounded-xl transition">
-                تعديل الصلاحيات
+                تعديل الصلاحيات والبرومبت
               </button>
             </div>
           `;
@@ -636,7 +664,8 @@
       const agent = cachedAgents.find(a => a.id === id);
       if (!agent) return;
       document.getElementById('modal-agent-id').value = agent.id;
-      document.getElementById('modal-agent-name').textContent = `إعدادات: ${agent.name}`;
+      document.getElementById('modal-agent-name').textContent = `تعديل برومبت وصلاحيات: ${agent.name}`;
+      document.getElementById('modal-agent-prompt').value = agent.systemPrompt || '';
       document.getElementById('modal-agent-key').value = agent.apiKey || '';
       document.getElementById('modal-agent-web').checked = agent.canSearchWeb;
       document.getElementById('agent-modal').classList.remove('hidden');
@@ -648,6 +677,7 @@
 
     async function saveAgentSettings() {
       const id = document.getElementById('modal-agent-id').value;
+      const systemPrompt = document.getElementById('modal-agent-prompt').value.trim();
       const apiKey = document.getElementById('modal-agent-key').value.trim();
       const canSearchWeb = document.getElementById('modal-agent-web').checked;
 
@@ -655,10 +685,11 @@
         await fetch(`/api/agents/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ apiKey, canSearchWeb })
+          body: JSON.stringify({ systemPrompt, apiKey, canSearchWeb })
         });
         closeAgentModal();
         fetchAgents();
+        alert('تم حفظ إعدادات وبرومبت الوكيل بنجاح!');
       } catch (e) {
         console.error(e);
       }
@@ -671,14 +702,15 @@
     }
 
     async function logoutWhatsApp() {
-      if (!confirm('إنهاء جلسة واتساب؟')) return;
+      if (!confirm('إنهاء جلسة واتساب وتوليد QR جديد؟')) return;
       await fetch('/api/whatsapp/logout', { method: 'POST' });
       checkWhatsAppStatus();
+      openWhatsAppModal();
     }
 
     checkWhatsAppStatus();
     fetchTasks();
-    setInterval(checkWhatsAppStatus, 20000);
+    setInterval(checkWhatsAppStatus, 10000);
     setInterval(fetchTasks, 30000);
   </script>
 </body>
