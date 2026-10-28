@@ -12,10 +12,10 @@
 
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   
-  <!-- مكتبة رسم خريطة الأفكار والشبكات التفاعلية -->
+  <!-- مكتبة رسم خريطة الأفكار التفاعلية -->
   <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
 
   <style>
@@ -27,7 +27,7 @@
 </head>
 <body class="bg-[#F5F6FA] text-[#1E293B] antialiased h-screen overflow-hidden flex flex-col md:flex-row">
 
-  <!-- الشريط الجانبي (Desktop Sidebar) -->
+  <!-- 1. الشريط الجانبي الأساسي للكمبيوتر (Desktop Sidebar) -->
   <aside class="hidden md:flex w-16 bg-[#4338CA] flex-col items-center py-6 gap-6 text-white/70 select-none z-20 shadow-lg">
     <div class="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center text-white font-extrabold text-lg shadow-inner">
       س
@@ -36,38 +36,48 @@
       <button onclick="switchTab('kanban')" id="side-btn-kanban" title="لوحة المهام" class="p-3 rounded-2xl bg-white/20 text-white transition shadow-sm">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
       </button>
-      <button onclick="switchTab('habits')" id="side-btn-habits" title="العادات والمكافآت" class="p-3 rounded-2xl hover:bg-white/10 hover:text-white transition">
+      <button onclick="switchTab('habits')" id="side-btn-habits" title="الورد والعادات والمكافآت" class="p-3 rounded-2xl hover:bg-white/10 hover:text-white transition">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
       </button>
-      <button onclick="switchTab('mindmap')" id="side-btn-mindmap" title="خريطة الأفكار" class="p-3 rounded-2xl hover:bg-white/10 hover:text-white transition">
+      <button onclick="switchTab('mindmap')" id="side-btn-mindmap" title="خريطة الأفكار والمشاريع" class="p-3 rounded-2xl hover:bg-white/10 hover:text-white transition">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
       </button>
-      <button onclick="switchTab('agents')" id="side-btn-agents" title="فريق الوكلاء" class="p-3 rounded-2xl hover:bg-white/10 hover:text-white transition">
+      <button onclick="switchTab('agents')" id="side-btn-agents" title="فريق الوكلاء الذكي" class="p-3 rounded-2xl hover:bg-white/10 hover:text-white transition">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
       </button>
     </nav>
-    <div class="mt-auto">
+    <div class="mt-auto flex flex-col gap-3">
+      <button onclick="fetchTasks()" title="تحديث البيانات" class="p-3 rounded-2xl hover:bg-white/10 hover:text-white transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+      </button>
       <button onclick="logoutWhatsApp()" title="تسجيل الخروج من واتساب" class="p-3 rounded-2xl hover:bg-red-500/20 hover:text-red-300 transition text-white/50">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
       </button>
     </div>
   </aside>
 
-  <!-- مساحة المحتوى -->
+  <!-- 2. مساحة المحتوى الرئيسية -->
   <div class="flex-1 flex flex-col h-full overflow-hidden">
     
+    <!-- رأس الصفحة العلوي (Header) -->
     <header class="bg-white/90 backdrop-blur-md border-b border-slate-100 px-4 md:px-8 py-4 flex justify-between items-center z-10">
       <div>
         <h1 class="text-base md:text-xl font-bold text-[#1E293B]">السكرتير التنفيذي الذكي</h1>
-        <p class="text-[11px] md:text-xs text-[#64748B] mt-0.5" id="completion-summary">جاري التحميل...</p>
+        <p class="text-[11px] md:text-xs text-[#64748B] mt-0.5" id="completion-summary">جاري تحميل البيانات...</p>
       </div>
 
       <div class="flex items-center gap-2 md:gap-3">
-        <!-- زر نسخ رابط مزامنة تقويم الهاتف -->
-        <button onclick="copyCalendarFeed()" class="px-3 py-1.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition flex items-center gap-1">
-          <span>📅 ربط تقويم الهاتف</span>
+        <!-- زر إضافة مهمة جديدة مفعّل -->
+        <button onclick="openNewTaskModal()" class="bg-[#1E293B] hover:bg-slate-800 text-white px-3.5 py-1.5 rounded-2xl text-xs font-semibold shadow-sm transition flex items-center gap-1">
+          <span>+ إضافة مهمة جديدة</span>
         </button>
 
+        <!-- زر نسخ رابط مزامنة تقويم الهاتف -->
+        <button onclick="copyCalendarFeed()" class="hidden sm:flex px-3 py-1.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition items-center gap-1">
+          <span>📅 ربط التقويم</span>
+        </button>
+
+        <!-- حالة اتصال واتساب -->
         <div id="wa-status-badge" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
           <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
           <span>جاري الفحص...</span>
@@ -75,11 +85,14 @@
       </div>
     </header>
 
+    <!-- منطقة عرض التبويبات -->
     <main class="flex-1 overflow-x-auto overflow-y-auto p-4 md:p-8 pb-20 md:pb-8">
       
-      <!-- 1. لوحة المهام (Kanban) -->
+      <!-- تبويب 1: لوحة المهام (Kanban) -->
       <div id="view-kanban" class="flex flex-col md:flex-row gap-6 h-full items-start">
-        <div class="w-full md:w-80 flex flex-col max-h-full">
+        
+        <!-- في الانتظار -->
+        <div class="w-full md:w-80 min-w-[19rem] flex flex-col max-h-full">
           <div class="flex items-center justify-between mb-3 px-2">
             <div class="flex items-center gap-2">
               <span class="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
@@ -90,7 +103,8 @@
           <div id="col-todo" class="flex flex-col gap-3.5"></div>
         </div>
 
-        <div class="w-full md:w-80 flex flex-col max-h-full">
+        <!-- جاري التنفيذ -->
+        <div class="w-full md:w-80 min-w-[19rem] flex flex-col max-h-full">
           <div class="flex items-center justify-between mb-3 px-2">
             <div class="flex items-center gap-2">
               <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
@@ -101,7 +115,8 @@
           <div id="col-inprogress" class="flex flex-col gap-3.5"></div>
         </div>
 
-        <div class="w-full md:w-80 flex flex-col max-h-full">
+        <!-- المكتملة -->
+        <div class="w-full md:w-80 min-w-[19rem] flex flex-col max-h-full">
           <div class="flex items-center justify-between mb-3 px-2">
             <div class="flex items-center gap-2">
               <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
@@ -111,9 +126,10 @@
           </div>
           <div id="col-done" class="flex flex-col gap-3.5"></div>
         </div>
+
       </div>
 
-      <!-- 2. تبويب العادات والمكافآت -->
+      <!-- تبويب 2: العادات والمكافآت (Habits & Gamification) -->
       <div id="view-habits" class="hidden flex flex-col gap-6 max-w-4xl mx-auto">
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col justify-between">
@@ -148,7 +164,7 @@
         </div>
       </div>
 
-      <!-- 3. تبويب خريطة الأفكار والعلاقات (Mind Map) -->
+      <!-- تبويب 3: خريطة الأفكار والعلاقات (Mind Map) -->
       <div id="view-mindmap" class="hidden flex flex-col gap-4 h-full max-w-5xl mx-auto">
         <div class="bg-white p-5 rounded-3xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex justify-between items-center">
           <div>
@@ -159,10 +175,10 @@
             تحديث الخريطة
           </button>
         </div>
-        <div id="mindmap-container" class="flex-1 min-h-[450px] bg-white rounded-3xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.03)] overflow-hidden"></div>
+        <div id="mindmap-container" class="flex-1 min-h-[460px] bg-white rounded-3xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.03)] overflow-hidden"></div>
       </div>
 
-      <!-- 4. تبويب فريق الوكلاء الذكي -->
+      <!-- تبويب 4: فريق الوكلاء الذكي (Multi-Agent Team) -->
       <div id="view-agents" class="hidden flex flex-col gap-6 max-w-4xl mx-auto">
         <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
@@ -179,7 +195,7 @@
 
     </main>
 
-    <!-- شريط التنقل السفلي للهواتف -->
+    <!-- شريط التنقل السفلي للهواتف (Mobile Bottom Nav) -->
     <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-100 py-2.5 px-6 flex justify-around items-center z-20">
       <button onclick="switchTab('kanban')" id="mob-btn-kanban" class="flex flex-col items-center gap-1 text-[#4338CA]">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
@@ -199,6 +215,37 @@
       </button>
     </nav>
 
+  </div>
+
+  <!-- نافذة إضافة مهمة جديدة يدوياً -->
+  <div id="new-task-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 max-w-md w-full flex flex-col gap-4">
+      <div class="flex justify-between items-center">
+        <h3 class="font-bold text-base text-[#1E293B]">إضافة مهمة جديدة</h3>
+        <button onclick="closeNewTaskModal()" class="text-slate-400 hover:text-slate-600 text-sm">✕</button>
+      </div>
+      <div class="flex flex-col gap-3">
+        <input type="text" id="task-title" placeholder="عنوان المهمة..." class="w-full text-xs p-3 rounded-2xl border border-slate-200 outline-none focus:border-indigo-500" />
+        <textarea id="task-desc" placeholder="تفاصيل إضافية (اختياري)..." rows="2" class="w-full text-xs p-3 rounded-2xl border border-slate-200 outline-none focus:border-indigo-500"></textarea>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-[11px] text-slate-500 block mb-1">الموعد والتاريخ</label>
+            <input type="datetime-local" id="task-date" class="w-full text-xs p-2 rounded-xl border border-slate-200 outline-none" />
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-500 block mb-1">الأولوية</label>
+            <select id="task-priority" class="w-full text-xs p-2 rounded-xl border border-slate-200 outline-none">
+              <option value="MEDIUM">عادية</option>
+              <option value="HIGH">مرتفعة</option>
+              <option value="URGENT">عاجلة جداً</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <button onclick="submitNewTask()" class="w-full py-2.5 bg-[#4338CA] text-white text-xs font-semibold rounded-2xl hover:opacity-90 transition mt-2">
+        حفظ المهمة
+      </button>
+    </div>
   </div>
 
   <!-- نافذة استبدال المكافآت -->
@@ -228,7 +275,7 @@
         <input type="checkbox" id="modal-agent-web" class="w-4 h-4 text-indigo-600 rounded border-slate-300" />
         <label for="modal-agent-web" class="text-xs font-semibold text-slate-700">تفعيل صلاحية البحث المباشر في الويب والشبكات</label>
       </div>
-      <button onclick="saveAgentSettings()" class="w-full py-2.5 bg-[#4338CA] text-white text-xs font-semibold rounded-xl hover:opacity-90 transition mt-2">
+      <button onclick="saveAgentSettings()" class="w-full py-2.5 bg-[#4338CA] text-white text-xs font-semibold rounded-2xl hover:opacity-90 transition mt-2">
         حفظ الإعدادات
       </button>
     </div>
@@ -243,6 +290,7 @@
     let userPoints = 0;
     let mindmapNetwork = null;
 
+    // دالة التبديل بين التبويبات وتفعيل الأزرار
     function switchTab(tab) {
       ['kanban', 'habits', 'mindmap', 'agents'].forEach(t => {
         const view = document.getElementById(`view-${t}`);
@@ -368,6 +416,40 @@
       return card;
     }
 
+    // نافذة إضافة مهمة جديدة
+    function openNewTaskModal() {
+      document.getElementById('new-task-modal').classList.remove('hidden');
+    }
+    function closeNewTaskModal() {
+      document.getElementById('new-task-modal').classList.add('hidden');
+    }
+    async function submitNewTask() {
+      const title = document.getElementById('task-title').value.trim();
+      const description = document.getElementById('task-desc').value.trim();
+      const dueDate = document.getElementById('task-date').value;
+      const priority = document.getElementById('task-priority').value;
+
+      if (!title) {
+        alert('يرجى إدخال عنوان المهمة');
+        return;
+      }
+
+      try {
+        await fetch('/api/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, description, dueDate: dueDate || null, priority })
+        });
+        closeNewTaskModal();
+        document.getElementById('task-title').value = '';
+        document.getElementById('task-desc').value = '';
+        fetchTasks();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // العادات والمكافآت
     async function fetchHabits() {
       try {
         const res = await fetch('/api/habits');
@@ -403,7 +485,7 @@
           list.appendChild(el);
         });
       } catch (e) {
-        console.error(e);
+        console.error('فشل جلب العادات:', e);
       }
     }
 
@@ -465,9 +547,7 @@
       }
     }
 
-    // ==========================================
-    // خريطة الأفكار والعلاقات (Mind Map Network)
-    // ==========================================
+    // خريطة الأفكار
     async function fetchMindMap() {
       try {
         const res = await fetch('/api/mindmap');
@@ -501,21 +581,16 @@
       }
     }
 
-    // ==========================================
-    // نسخ رابط اشتراك تقويم الهاتف (.ics)
-    // ==========================================
     function copyCalendarFeed() {
       const feedUrl = `${window.location.origin}/api/calendar.ics`;
       navigator.clipboard.writeText(feedUrl).then(() => {
-        alert(`تم نسخ رابط اشتراك التقويم بنجاح:\n${feedUrl}\n\nيمكنك الآن إضافته إلى تقويم الآيفون (Add Subscribed Calendar) أو تقويم Google ليتزامن جدولك تلقائياً.`);
+        alert(`تم نسخ رابط اشتراك التقويم بنجاح:\n${feedUrl}\n\nيمكنك الآن إضافته إلى تقويم هاتفك (Add Subscribed Calendar).`);
       }).catch(() => {
         prompt('انسخ رابط اشتراك التقويم التالي وأضفه إلى هاتفك:', feedUrl);
       });
     }
 
-    // ==========================================
-    // إدارة فريق الوكلاء الذكي
-    // ==========================================
+    // فريق الوكلاء
     let cachedAgents = [];
 
     async function fetchAgents() {
