@@ -16,7 +16,7 @@ const TOGETHER_MODELS = [
 export async function processUserMessage(senderJid: string, userMessage: string): Promise<string> {
   const cleanMessage = userMessage.trim();
 
-  // توقيت عُمان المحلي (UTC+4)
+  // حساب التوقيت المحلي لسلطنة عُمان (UTC+4)
   const now = new Date();
   const omanOffsetMinutes = 4 * 60;
   const localTime = new Date(now.getTime() + (omanOffsetMinutes + now.getTimezoneOffset()) * 60000);
@@ -26,11 +26,12 @@ export async function processUserMessage(senderJid: string, userMessage: string)
   tomorrowDate.setDate(tomorrowDate.getDate() + 1);
   const tomorrowStr = tomorrowDate.toISOString().split('T')[0];
 
-  // التحقق من نية الإنشاء والتبليغ
+  // ==========================================
+  // 1. المسار السريع لأوامر إنشاء وتكليف المهام
+  // ==========================================
   const isCreationIntent = /(?:مهمه|مهمة|ذكر|ذَكِّر|ذكرني|سجل|أضف|اضف|كلف|كلّف|بلغ|بلّغ|أخبر|اخبر|خبر|قل لـ?|قول لـ?|خلي|خلّي|وصي|وصّي|ارسل لـ?|أرسل لـ?)/i.test(cleanMessage);
 
   if (isCreationIntent) {
-    // استخراج رقم الهاتف
     let assigneePhone: string | null = null;
     const phoneMatch = cleanMessage.match(/(?:\+?968)?\s*([79]\d{7}|\d{8,15})\b/);
     if (phoneMatch) {
@@ -38,7 +39,6 @@ export async function processUserMessage(senderJid: string, userMessage: string)
       assigneePhone = (rawDigits.length === 8 && (rawDigits.startsWith('7') || rawDigits.startsWith('9'))) ? '968' + rawDigits : rawDigits;
     }
 
-    // استخراج اسم المكلف
     const assigneeMatch = cleanMessage.match(/(?:ذكر|ذَكِّر|كلف|كلّف|بلغ|بلّغ|أخبر|اخبر|خبر|خلي|خلّي|قل لـ?|قول لـ?|وصي|وصّي|مهمة لـ?|مهمه لـ?)\s+([^\s\n،,:]+)/i);
     let assigneeName: string | null = null;
     if (assigneeMatch) {
@@ -49,7 +49,6 @@ export async function processUserMessage(senderJid: string, userMessage: string)
       }
     }
 
-    // اليوم والموعد
     const isToday = cleanMessage.includes('اليوم');
     const targetDayObj = isToday ? new Date(localTime) : new Date(tomorrowDate);
 
@@ -68,7 +67,6 @@ export async function processUserMessage(senderJid: string, userMessage: string)
       targetMinute = m;
     }
 
-    // تخزين الموعد بصيغة UTC (طرح 4 ساعات)
     const taskDateUtc = new Date(Date.UTC(
       targetDayObj.getFullYear(),
       targetDayObj.getMonth(),
@@ -78,7 +76,6 @@ export async function processUserMessage(senderJid: string, userMessage: string)
       0
     ));
 
-    // تنظيف عنوان المهمة
     let textNoPhone = cleanMessage.replace(/(?:هذا\s+)?(?:رقم|هاتف|جوال)?(?:\s+[^\s\n]+)?\s*[:=]?\s*\+?\d{8,15}/gi, '').trim();
     let cleanTitle = textNoPhone.replace(/^(?:مهمه لبكره|مهمة لبكرة|مهمه|مهمة|ذكرني|سجل موعد|سجل لي موعد|سجل|ذكر|ذَكِّر|كلف|كلّف|بلغ|بلّغ|أخبر|اخبر|خبر|خلي|خلّي)\s*/i, '').trim();
 
@@ -139,7 +136,6 @@ export async function processUserMessage(senderJid: string, userMessage: string)
         include: { assignee: true },
       });
 
-      // جدولة التنبيه بدقة عبر Redis & BullMQ فور إنشاء المهمة
       await scheduleTaskReminder(created);
 
       const displayHour = targetHour > 12 ? targetHour - 12 : (targetHour === 0 ? 12 : targetHour);
@@ -162,35 +158,80 @@ export async function processUserMessage(senderJid: string, userMessage: string)
     }
   }
 
-  // الاستعلامات والمحادثة العامة
+  // ==========================================
+  // 2. توجيه الطلب إلى الوكيل المناسب (Agent Orchestration)
+  // ==========================================
+
+  // أ. استعلامات المال والمصاريف -> المدير المالي
+  const isFinanceQuery = /(?:مصاريف|راتب|ميزانية|صرفت|التزامات|فلوس|قسط|فاتورة|حسابات)/i.test(cleanMessage);
+
+  // ب. استعلامات الكريبتو والسوق -> وكيل أبحاث العملات الرقمية
+  const isCryptoQuery = /(?:كريبتو|عملات رقمية|بيتكوين|ايثريوم|سولانا|سعر|اهداف|تحليل السوق)/i.test(cleanMessage);
+
+  // ج. استعلامات البحث والدراسة -> وكيل الاستكشاف والبحث
+  const isResearchQuery = /(?:ابحث لي|سوي بحث|لخص لي موضوع|تقرير عن|ما هو|كيف يعمل)/i.test(cleanMessage);
+
+  let activeAgentRole = 'PLANNER';
+  if (isFinanceQuery) activeAgentRole = 'FINANCIAL';
+  else if (isCryptoQuery) activeAgentRole = 'CRYPTO';
+  else if (isResearchQuery) activeAgentRole = 'RESEARCHER';
+
+  // جلب إعدادات الوكيل المختار من قاعدة البيانات
+  const agentConfig = await prisma.agent.findFirst({
+    where: { role: activeAgentRole, isActive: true },
+  });
+
   const activeTasks = await prisma.task.findMany({
     where: { status: { not: 'DONE' } },
     orderBy: { dueDate: 'asc' },
     include: { assignee: true },
   });
 
+  const basePrompt = agentConfig?.systemPrompt || `أنت سكرتير ومساعد تنفيذي ذكي يدير جدول أعمال مديره عبر واتساب.`;
+
   const systemPrompt = `
-أنت سكرتير تنفيذي ذكي يدير جدول أعمال مديره عبر واتساب.
-التوقيت الحالي لسلطنة عُمان (UTC+4): ${localTime.toLocaleString('ar-EG')} (اليوم هو: ${todayStr}، غداً هو: ${tomorrowStr}).
-المهام الحالية المسجلة بالنظام: ${JSON.stringify(activeTasks)}.
-أجب بلهجة عربية خليجية مهذبة ومباشرة باختصار وبدون مقدمات رسمية زائدة وتجنب كلمة "يا فندم".
+${basePrompt}
+التوقيت الحالي لسلطنة عُمان (UTC+4): ${localTime.toLocaleString('ar-EG')} (اليوم هو: ${todayStr}، غداً: ${tomorrowStr}).
+المهام الحالية المسجلة بالنظام: ${JSON.stringify(activeTasks.slice(0, 5))}.
+تعليمات الرد:
+1. أجب بلهجة عربية خليجية مهذبة ولبقة ومباشرة بدون إطالة أو حشو وتجنب كلمة "يا فندم".
+2. إذا كانت الاستشارة مالية أو خاصة بالعملات، اعرض النقاط المهمة والتحذيرات بوضوح وإيجاز.
 `;
+
+  // استخدام مفتاح الوكيل الخاص إن وجد، وإلا نستخدم المفتاح الأساسي
+  const clientToUse = agentConfig?.apiKey ? new OpenAI({
+    apiKey: agentConfig.apiKey,
+    baseURL: 'https://api.together.xyz/v1',
+  }) : ai;
 
   for (const model of TOGETHER_MODELS) {
     try {
-      const response = await ai.chat.completions.create({
+      const response = await clientToUse.chat.completions.create({
         model,
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage }
+          { role: 'user', content: cleanMessage },
         ],
       });
 
-      return response.choices[0].message.content || 'أبشر طال عمرك، معك سكرتيرك الخاص.';
+      const reply = response.choices[0].message.content;
+      if (reply) {
+        // حفظ سجل التفاعل في سجلات الوكيل
+        if (agentConfig) {
+          await prisma.agentLog.create({
+            data: {
+              agentId: agentConfig.id,
+              query: cleanMessage,
+              response: reply,
+            },
+          }).catch(() => {});
+        }
+        return reply;
+      }
     } catch (err: any) {
-      console.warn(`فشل النموذج ${model} على Together AI، جاري تجربة البديل...`);
+      console.warn(`فشل النموذج ${model}، جاري تجربة البديل...`);
     }
   }
 
-  return 'أبشر طال عمرك، معك سكرتيرك التنفيذي. كيف أستطيع خدمتك؟';
+  return 'أبشر طال عمرك، معك سكرتيرك التنفيذي. تفضل كيف أستطيع خدمتك؟';
 }
