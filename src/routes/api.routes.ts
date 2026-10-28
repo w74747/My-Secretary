@@ -1,6 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { scheduleTaskReminder, cancelTaskReminder } from '../services/queue.service';
+import {
+  getGoogleAuthUrl,
+  saveGoogleTokensFromCode,
+  syncTaskToGoogleCalendar,
+  deleteTaskFromGoogleCalendar,
+} from '../services/google-calendar.service';
 
 const router = Router();
 
@@ -37,6 +43,8 @@ router.post('/tasks', async (req: Request, res: Response) => {
     });
 
     await scheduleTaskReminder(task);
+    await syncTaskToGoogleCalendar(task);
+
     res.status(201).json(task);
   } catch (error) {
     res.status(500).json({ error: 'فشل إنشاء المهمة' });
@@ -46,6 +54,10 @@ router.post('/tasks', async (req: Request, res: Response) => {
 router.delete('/tasks/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const task = await prisma.task.findUnique({ where: { id } });
+    if (task && task.googleEventId) {
+      await deleteTaskFromGoogleCalendar(task.googleEventId);
+    }
     await cancelTaskReminder(id);
     await prisma.task.delete({ where: { id } });
     res.json({ success: true, message: 'تم حذف المهمة بنجاح' });
@@ -55,7 +67,7 @@ router.delete('/tasks/:id', async (req: Request, res: Response) => {
 });
 
 // ==========================================
-// مسارات العادات والمكافآت (Habits & Gamification)
+// مسارات العادات ونظام النقاط والمكافآت (Habits & Gamification)
 // ==========================================
 
 router.get('/habits', async (req: Request, res: Response) => {
@@ -294,53 +306,51 @@ router.get('/mindmap', async (req: Request, res: Response) => {
 });
 
 // ==========================================
-// مسار اشتراك تقويم الهاتف المباشر (.ics Feed)
+// مسارات ربط Google Calendar الرسمي (OAuth 2.0)
 // ==========================================
 
-router.get('/calendar.ics', async (req: Request, res: Response) => {
+router.get('/auth/google', (req: Request, res: Response) => {
+  const url = getGoogleAuthUrl();
+  res.redirect(url);
+});
+
+router.get('/auth/google/callback', async (req: Request, res: Response) => {
+  const { code } = req.query;
+  if (!code) return res.status(400).send('كود التفويض غير موجود');
+
   try {
-    const tasks = await prisma.task.findMany({
-      where: { dueDate: { not: null } },
-      include: { assignee: true },
-    });
-
-    const formatICSDate = (date: Date) => {
-      return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-    };
-
-    let icsContent = [
-      'BEGIN:VCALENDAR',
-      'VERSION:2.0',
-      'PRODID:-//Executive OS//Calendar Feed//AR',
-      'CALSCALE:GREGORIAN',
-      'METHOD:PUBLISH',
-      'X-WR-CALNAME:مهام السكرتير التنفيذي',
-      'X-WR-TIMEZONE:Asia/Muscat',
-    ];
-
-    tasks.forEach(t => {
-      if (!t.dueDate) return;
-      const start = new Date(t.dueDate);
-      const end = new Date(start.getTime() + 60 * 60 * 1000); // مدة افتراضية ساعة واحدة
-
-      icsContent.push('BEGIN:VEVENT');
-      icsContent.push(`UID:task-${t.id}@executive-os`);
-      icsContent.push(`DTSTAMP:${formatICSDate(new Date())}`);
-      icsContent.push(`DTSTART:${formatICSDate(start)}`);
-      icsContent.push(`DTEND:${formatICSDate(end)}`);
-      icsContent.push(`SUMMARY:${t.title}`);
-      icsContent.push(`DESCRIPTION:${t.description || 'مهمة مجدولة عبر السكرتير التنفيذي'}${t.assignee ? ' - المكلف: ' + t.assignee.name : ''}`);
-      icsContent.push(`STATUS:${t.status === 'DONE' ? 'COMPLETED' : 'CONFIRMED'}`);
-      icsContent.push('END:VEVENT');
-    });
-
-    icsContent.push('END:VCALENDAR');
-
-    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
-    res.setHeader('Content-Disposition', 'inline; filename="tasks.ics"');
-    res.send(icsContent.join('\r\n'));
-  } catch (error) {
-    res.status(500).send('فشل توليد ملف التقويم');
+    await saveGoogleTokensFromCode(code as string);
+    res.send(`
+      <!DOCTYPE html>
+      <html dir="rtl" lang="ar">
+        <head>
+          <meta charset="UTF-8">
+          <title>نجاح ربط التقويم</title>
+          <style>
+            body { font-family: sans-serif; text-align: center; padding: 50px; background: #F8FAFC; }
+            .card { background: white; border-radius: 24px; padding: 30px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); max-width: 400px; margin: auto; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <h2 style="color:#15803D;">✅ تم ربط حساب Google Calendar بنجاح!</h2>
+            <p style="color:#64748B; font-size:14px;">تتم الآن مزامنة كافة المهام وتعديلاتها تلقائياً مع تقويم هاتفك وجوجل.</p>
+            <script>
+              setTimeout(() => {
+                if (window.opener) {
+                  window.opener.location.reload();
+                  window.close();
+                } else {
+                  window.location.href = '/';
+                }
+              }, 2500);
+            </script>
+          </div>
+        </body>
+      </html>
+    `);
+  } catch (err) {
+    res.status(500).send('فشل ربط حساب جوجل، يرجى التأكد من إدخال المتغيرات بشكل سليم.');
   }
 });
 
