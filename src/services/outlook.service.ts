@@ -15,7 +15,6 @@ interface OutlookAccount {
   pass: string;
 }
 
-// استخراج قائمة الحسابات من المتغيرات
 function getOutlookAccounts(): OutlookAccount[] {
   const rawEmails = process.env.OUTLOOK_EMAIL || '';
   const rawPasswords = process.env.OUTLOOK_PASSWORD || '';
@@ -56,8 +55,10 @@ export async function checkAndSummarizeOutlookEmails(): Promise<string[]> {
       const lock = await client.getMailboxLock('INBOX');
 
       try {
-        const messages = await client.search({ unseen: true });
-        const recentUids = messages.slice(-5); // أحدث 5 رسائل غير مقروءة للحساب
+        // البحث عن الإيميلات غير المقروءة بتوافق كامل مع أنواع المكتبة
+        const searchResult = await client.search({ seen: false });
+        const messages: number[] = Array.isArray(searchResult) ? searchResult : [];
+        const recentUids = messages.slice(-5);
 
         for (const uid of recentUids) {
           const message = await client.fetchOne(uid, { source: true, flags: true });
