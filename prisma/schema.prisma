@@ -69,3 +69,34 @@ model WhatsAppSession {
   data      String   @db.Text
   updatedAt DateTime @updatedAt
 }
+model Habit {
+  id          String     @id @default(uuid())
+  title       String
+  category    String     // SPIRITUAL (عبادات), FITNESS (رياضة), HEALTH (صحة), LEARNING (تعلم)
+  points      Int        @default(10) // النقاط المكتسبة عند إنجازها يومياً
+  targetCount Int        @default(1)  // مثلاً: 5 صلوات، أو 1 لورد القرآن
+  unit        String?    // مثل: "ركعة", "صفحة", "خطوة"
+  createdAt   DateTime   @default(now())
+  logs        HabitLog[]
+}
+
+model HabitLog {
+  id        String   @id @default(uuid())
+  habitId   String
+  habit     Habit    @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  date      DateTime @default(now()) // تاريخ اليوم المسجل
+  completed Boolean  @default(true)
+  count     Int      @default(1)
+  
+  @@unique([habitId, date])
+}
+
+model Reward {
+  id          String   @id @default(uuid())
+  title       String   // مثل: قطعة شوكولاتة داكنة، آيسكريم، ساعة لعب
+  costPoints  Int      // تكلفة فتح المكافأة بالنقاط
+  icon        String?  // أيقونة المكافأة
+  isClaimed   Boolean  @default(false)
+  claimedAt   DateTime?
+  createdAt   DateTime @default(now())
+}
