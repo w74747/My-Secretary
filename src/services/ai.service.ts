@@ -1,12 +1,12 @@
 import OpenAI from 'openai';
 import { prisma } from '../lib/prisma';
+import { scheduleTaskReminder } from './queue.service';
 
 const ai = new OpenAI({
   apiKey: process.env.TOGETHER_API_KEY,
   baseURL: 'https://api.together.xyz/v1',
 });
 
-// النماذج المتاحة في السيرفرات السحابية المجانية النشطة على Together AI
 const TOGETHER_MODELS = [
   'meta-llama/Llama-3.3-70B-Instruct-Turbo',
   'mistralai/Mistral-7B-Instruct-v0.3',
@@ -16,7 +16,7 @@ const TOGETHER_MODELS = [
 export async function processUserMessage(senderJid: string, userMessage: string): Promise<string> {
   const cleanMessage = userMessage.trim();
 
-  // حساب التوقيت المحلي لسلطنة عُمان (UTC+4)
+  // توقيت عُمان المحلي (UTC+4)
   const now = new Date();
   const omanOffsetMinutes = 4 * 60;
   const localTime = new Date(now.getTime() + (omanOffsetMinutes + now.getTimezoneOffset()) * 60000);
@@ -26,11 +26,11 @@ export async function processUserMessage(senderJid: string, userMessage: string)
   tomorrowDate.setDate(tomorrowDate.getDate() + 1);
   const tomorrowStr = tomorrowDate.toISOString().split('T')[0];
 
-  // 1. المعالج السريع والمباشر للأوامر والتبليغ
+  // التحقق من نية الإنشاء والتبليغ
   const isCreationIntent = /(?:مهمه|مهمة|ذكر|ذَكِّر|ذكرني|سجل|أضف|اضف|كلف|كلّف|بلغ|بلّغ|أخبر|اخبر|خبر|قل لـ?|قول لـ?|خلي|خلّي|وصي|وصّي|ارسل لـ?|أرسل لـ?)/i.test(cleanMessage);
-  
+
   if (isCreationIntent) {
-    // أ. استخراج رقم الهاتف بالكامل
+    // استخراج رقم الهاتف
     let assigneePhone: string | null = null;
     const phoneMatch = cleanMessage.match(/(?:\+?968)?\s*([79]\d{7}|\d{8,15})\b/);
     if (phoneMatch) {
@@ -38,7 +38,7 @@ export async function processUserMessage(senderJid: string, userMessage: string)
       assigneePhone = (rawDigits.length === 8 && (rawDigits.startsWith('7') || rawDigits.startsWith('9'))) ? '968' + rawDigits : rawDigits;
     }
 
-    // ب. استخراج اسم الشخص المكلف
+    // استخراج اسم المكلف
     const assigneeMatch = cleanMessage.match(/(?:ذكر|ذَكِّر|كلف|كلّف|بلغ|بلّغ|أخبر|اخبر|خبر|خلي|خلّي|قل لـ?|قول لـ?|وصي|وصّي|مهمة لـ?|مهمه لـ?)\s+([^\s\n،,:]+)/i);
     let assigneeName: string | null = null;
     if (assigneeMatch) {
@@ -49,11 +49,10 @@ export async function processUserMessage(senderJid: string, userMessage: string)
       }
     }
 
-    // ج. تحديد تاريخ الموعد (اليوم أم غداً)
+    // اليوم والموعد
     const isToday = cleanMessage.includes('اليوم');
     const targetDayObj = isToday ? new Date(localTime) : new Date(tomorrowDate);
 
-    // د. استخراج الوقت بدقة
     let targetHour = 9;
     let targetMinute = 0;
     const isEvening = /(?:مساء|مساءً|بالليل|عصر|عصراً|ظهر|ظهراً)/i.test(cleanMessage);
@@ -69,7 +68,7 @@ export async function processUserMessage(senderJid: string, userMessage: string)
       targetMinute = m;
     }
 
-    // تحويل وقت عُمان إلى UTC بطرح 4 ساعات للحفظ بدقة
+    // تخزين الموعد بصيغة UTC (طرح 4 ساعات)
     const taskDateUtc = new Date(Date.UTC(
       targetDayObj.getFullYear(),
       targetDayObj.getMonth(),
@@ -79,7 +78,7 @@ export async function processUserMessage(senderJid: string, userMessage: string)
       0
     ));
 
-    // هـ. تنظيف عنوان المهمة مع إزالة كلمات التوقيت والزوائد بدون تكرار
+    // تنظيف عنوان المهمة
     let textNoPhone = cleanMessage.replace(/(?:هذا\s+)?(?:رقم|هاتف|جوال)?(?:\s+[^\s\n]+)?\s*[:=]?\s*\+?\d{8,15}/gi, '').trim();
     let cleanTitle = textNoPhone.replace(/^(?:مهمه لبكره|مهمة لبكرة|مهمه|مهمة|ذكرني|سجل موعد|سجل لي موعد|سجل|ذكر|ذَكِّر|كلف|كلّف|بلغ|بلّغ|أخبر|اخبر|خبر|خلي|خلّي)\s*/i, '').trim();
 
@@ -87,7 +86,6 @@ export async function processUserMessage(senderJid: string, userMessage: string)
       cleanTitle = cleanTitle.substring(assigneeName.length).trim();
     }
 
-    // حذف كلمات الأيام والوقت من العنوان لمنع التكرار نهائياً
     cleanTitle = cleanTitle
       .replace(/\b(?:اليوم|بكره|غدا|غداً)\b/gi, '')
       .replace(/الساع[ةه]\s*\d{1,2}(?::\d{2})?\s*(?:صباحاً|صباحا|مساءً|مساء|ونص|وربع)?/gi, '')
@@ -141,6 +139,9 @@ export async function processUserMessage(senderJid: string, userMessage: string)
         include: { assignee: true },
       });
 
+      // جدولة التنبيه بدقة عبر Redis & BullMQ فور إنشاء المهمة
+      await scheduleTaskReminder(created);
+
       const displayHour = targetHour > 12 ? targetHour - 12 : (targetHour === 0 ? 12 : targetHour);
       const amPm = targetHour >= 12 ? 'م' : 'ص';
       const timeFormatted = `${String(displayHour).padStart(2, '0')}:${String(targetMinute).padStart(2, '0')} ${amPm}`;
@@ -161,7 +162,7 @@ export async function processUserMessage(senderJid: string, userMessage: string)
     }
   }
 
-  // 2. معالجة الاستعلامات العامة (مثل: "ايش عندي اليوم") عبر Together AI
+  // الاستعلامات والمحادثة العامة
   const activeTasks = await prisma.task.findMany({
     where: { status: { not: 'DONE' } },
     orderBy: { dueDate: 'asc' },
