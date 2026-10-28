@@ -32,36 +32,37 @@ model Contact {
 }
 
 model Task {
-  id           String      @id @default(cuid())
-  title        String
-  description  String?
-  priority     Priority    @default(MEDIUM)
-  status       TaskStatus  @default(TODO)
-  progress     Int         @default(0)
-  dueDate      DateTime?
-  orderIndex   Int         @default(0)
+  id               String        @id @default(cuid())
+  title            String
+  description      String?
+  priority         Priority      @default(MEDIUM)
+  status           TaskStatus    @default(TODO)
+  progress         Int           @default(0)
+  dueDate          DateTime?
+  orderIndex       Int           @default(0)
   
   // خيارات التذكير المتقدمة
-  reminderType     String  @default("NONE")     // NONE, EXACT, BEFORE, EVERY_X_HOURS
-  reminderOffset   Int     @default(0)          // عدد الدقائق أو عدد الساعات
-  repeatDaily      Boolean @default(false)      // هل يتكرر يومياً؟
-  lastReminderSent DateTime?                    // تاريخ آخر تذكير أُرسل لتفادي التكرار
+  reminderType     String        @default("NONE")     // NONE, EXACT, BEFORE, EVERY_X_HOURS
+  reminderOffset   Int           @default(0)          // عدد الدقائق أو عدد الساعات
+  repeatDaily      Boolean       @default(false)
+  lastReminderSent DateTime?
+  googleEventId    String?                            // معرف الحدث في تقويم جوجل للمزامنة والتعديل والحذف
 
-  assigneeId   String?
-  assignee     Contact?    @relation("AssignedTasks", fields: [assigneeId], references: [id])
-  activities   ActivityLog[]
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  assigneeId       String?
+  assignee         Contact?      @relation("AssignedTasks", fields: [assigneeId], references: [id])
+  activities       ActivityLog[]
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 }
 
 model ActivityLog {
-  id         String   @id @default(cuid())
-  action     String
-  source     String   @default("SYSTEM")
-  rawMessage String?
-  taskId     String?
-  task       Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  createdAt  DateTime @default(now())
+  id          String   @id @default(cuid())
+  action      String
+  source      String   @default("SYSTEM")
+  rawMessage  String?
+  taskId      String?
+  task        Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
 }
 
 model WhatsAppSession {
@@ -69,13 +70,14 @@ model WhatsAppSession {
   data      String   @db.Text
   updatedAt DateTime @updatedAt
 }
+
 model Habit {
   id          String     @id @default(uuid())
   title       String
-  category    String     // SPIRITUAL (عبادات), FITNESS (رياضة), HEALTH (صحة), LEARNING (تعلم)
-  points      Int        @default(10) // النقاط المكتسبة عند إنجازها يومياً
-  targetCount Int        @default(1)  // مثلاً: 5 صلوات، أو 1 لورد القرآن
-  unit        String?    // مثل: "ركعة", "صفحة", "خطوة"
+  category    String     // SPIRITUAL, FITNESS, HEALTH, LEARNING
+  points      Int        @default(10)
+  targetCount Int        @default(1)
+  unit        String?
   createdAt   DateTime   @default(now())
   logs        HabitLog[]
 }
@@ -84,7 +86,7 @@ model HabitLog {
   id        String   @id @default(uuid())
   habitId   String
   habit     Habit    @relation(fields: [habitId], references: [id], onDelete: Cascade)
-  date      DateTime @default(now()) // تاريخ اليوم المسجل
+  date      DateTime @default(now())
   completed Boolean  @default(true)
   count     Int      @default(1)
   
@@ -92,34 +94,43 @@ model HabitLog {
 }
 
 model Reward {
-  id          String   @id @default(uuid())
-  title       String   // مثل: قطعة شوكولاتة داكنة، آيسكريم، ساعة لعب
-  costPoints  Int      // تكلفة فتح المكافأة بالنقاط
-  icon        String?  // أيقونة المكافأة
-  isClaimed   Boolean  @default(false)
+  id          String    @id @default(uuid())
+  title       String
+  costPoints  Int
+  icon        String?
+  isClaimed   Boolean   @default(false)
   claimedAt   DateTime?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
 }
+
 model Agent {
-  id          String     @id @default(uuid())
-  name        String     // مثل: المدير المالي، وكيل أبحاث الويب، مستشار العملات الرقمية
-  role        String     // FINANCIAL, RESEARCHER, PLANNER, CRYPTO
-  description String?    // نبذة عن مهام الوكيل
-  systemPrompt String   @db.Text // التوجيهات الدقيقة للوكيل
-  apiKey      String?    // مفتاح API المخصص للوكيل (اختياري)
-  provider    String     @default("TOGETHER") // TOGETHER, GROQ, OPENAI
-  isActive    Boolean    @default(true)
-  canSearchWeb Boolean   @default(false) // صلاحية البحث في الويب
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  logs        AgentLog[]
+  id           String     @id @default(uuid())
+  name         String
+  role         String     // FINANCIAL, RESEARCHER, PLANNER, CRYPTO
+  description  String?
+  systemPrompt String     @db.Text
+  apiKey       String?
+  provider     String     @default("TOGETHER")
+  isActive     Boolean    @default(true)
+  canSearchWeb Boolean    @default(false)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  logs         AgentLog[]
 }
 
 model AgentLog {
   id        String   @id @default(uuid())
   agentId   String
   agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  query     String   @db.Text // السؤال أو المهمة المطلوبة من الوكيل
-  response  String   @db.Text // التقرير أو الإجابة التي قدمها الوكيل
+  query     String   @db.Text
+  response  String   @db.Text
   createdAt DateTime @default(now())
+}
+
+model GoogleAuth {
+  id           String   @id @default("default_user")
+  accessToken  String   @db.Text
+  refreshToken String   @db.Text
+  expiryDate   BigInt?
+  updatedAt    DateTime @updatedAt
 }
