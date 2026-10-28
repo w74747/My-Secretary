@@ -9,6 +9,7 @@ import fs from 'fs';
 import qrcode from 'qrcode';
 import { processUserMessage } from './ai.service';
 import { prisma } from '../lib/prisma';
+import { cancelTaskReminder } from './queue.service';
 
 class WhatsAppService {
   private sock: WASocket | null = null;
@@ -126,12 +127,11 @@ class WhatsAppService {
       if (type !== 'notify') return;
 
       for (const msg of messages) {
-        // تجاهل الرسائل الصادرة من البوت نفسه
         if (msg.key.fromMe) continue;
 
         const senderJid = msg.key.remoteJid;
 
-        // 1. تجاهل القنوات والحالات والمجموعات
+        // تجاهل القنوات والحالات والمجموعات
         if (
           !senderJid ||
           senderJid.endsWith('@newsletter') ||
@@ -154,11 +154,10 @@ class WhatsAppService {
         const senderDigits = senderJid.replace(/\D/g, '');
         const ownerPhone = (process.env.OWNER_PHONE || '').replace(/\D/g, '');
 
-        // مقارنة آخر 8 أرقام لتجنب الفوارق في كود الدولة (+968)
         const senderLast8 = senderDigits.slice(-8);
         const isOwner = ownerPhone ? senderDigits.includes(ownerPhone.slice(-8)) : false;
 
-        // 2. البحث عن مهمة نشطة معلقة تخص هذا الرقم إن كان شخصاً مكلفاً
+        // التحقق من وجود مهمة نشطة لهذا الرقم إن كان مكلّفاً
         const assignedTask = await prisma.task.findFirst({
           where: {
             status: { not: 'DONE' },
@@ -170,11 +169,8 @@ class WhatsAppService {
           orderBy: { dueDate: 'asc' },
         });
 
-        // ==============================================================
-        // الحالة الأولى: المرسل هو الشخص المكلّف بالمهمة (وليس المالك)
-        // ==============================================================
+        // 1. إذا كان المرسل مكلّفاً بالمهمة
         if (assignedTask && !isOwner) {
-          // التحقق هل الرسالة إفادة إنجاز صريحة فقط
           const isExplicitDone = /^(تم|تمت|خلصت|أنجزت|انجزت|سويتها|سويت المطلوب|جاهز)\b/i.test(cleanText);
 
           if (isExplicitDone) {
@@ -182,6 +178,9 @@ class WhatsAppService {
               where: { id: assignedTask.id },
               data: { status: 'DONE', progress: 100 },
             });
+
+            // إلغاء تذكير المهمة من طابور Redis لكونها اكتملت
+            await cancelTaskReminder(assignedTask.id);
 
             await this.sock?.sendMessage(senderJid, {
               text: 'يعطيك العافية، تم تسجيل إنجاز المهمة وإبلاغ المدير.',
@@ -194,33 +193,25 @@ class WhatsAppService {
               );
             }
           } else {
-            // محادثة عادية من المكلف (مثل: "ياخه كيف" أو أي كلام عادي) -> تجاهل تام وبصمت
             console.log(`ℹ️ تم تجاهل رسالة عادية من المكلّف [${assignedTask.assignee?.name}]: "${cleanText}"`);
           }
           continue;
         }
 
-        // ==============================================================
-        // الحالة الثانية: المرسل شخص آخر غير المالك وغير مكلف بمهمة
-        // ==============================================================
+        // 2. إذا كان المرسل شخصاً آخر غريباً
         if (!isOwner && ownerPhone) {
           console.log(`ℹ️ تم تجاهل رسالة من جهة اتصال شخصية [${senderDigits}]: "${cleanText}"`);
           continue;
         }
 
-        // ==============================================================
-        // الحالة الثالثة: الرسالة مرسلة منك (المالك)
-        // ==============================================================
-        // التحقق من وجود أمر مهمة أو استعلام جدول
+        // 3. التحقق من وجود نية صريحة لإنشاء/إدارة مهمة للمالك
         const hasTaskIntent = /^(مهمه|مهمة|ذكر|ذَكِّر|ذكرني|سجل|أضف|اضف|كلف|كلّف|بلغ|بلّغ|أخبر|اخبر|خبر|قل لـ?|قول لـ?|خلي|خلّي|وصي|وصّي|ارسل لـ?|أرسل لـ?|ايش عندي|شو عندي|جدولي|جدول المهام|المهام|تحديث المهمة)/i.test(cleanText);
 
         if (!hasTaskIntent) {
-          // محادثة عادية ترسلها أو تتلقاها ولا علاقة لها بالمهام -> تجاهل تام وبصمت
           console.log(`ℹ️ تم تجاهل رسالة عادية لا تحتوي على أمر مهمة: "${cleanText}"`);
           continue;
         }
 
-        // معالجة المهمة بواسطة محرك الذكاء الاصطناعي
         console.log(`🎯 جاري معالجة أمر مهمة صريح: "${cleanText}"`);
         try {
           const replyText = await processUserMessage(senderJid, cleanText);
