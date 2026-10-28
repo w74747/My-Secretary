@@ -157,7 +157,7 @@ class WhatsAppService {
         const senderLast8 = senderDigits.slice(-8);
         const isOwner = ownerPhone ? senderDigits.includes(ownerPhone.slice(-8)) : false;
 
-        // التحقق من وجود مهمة نشطة لهذا الرقم إن كان مكلّفاً
+        // التحقق من وجود مهمة نشطة لهذا الرقم إن كان شخصاً مكلّفاً
         const assignedTask = await prisma.task.findFirst({
           where: {
             status: { not: 'DONE' },
@@ -169,7 +169,7 @@ class WhatsAppService {
           orderBy: { dueDate: 'asc' },
         });
 
-        // 1. إذا كان المرسل مكلّفاً بالمهمة
+        // 1. إذا كان المرسل مكلّفاً بمهمة نشطة وليس هو المالك
         if (assignedTask && !isOwner) {
           const isExplicitDone = /^(تم|تمت|خلصت|أنجزت|انجزت|سويتها|سويت المطلوب|جاهز)\b/i.test(cleanText);
 
@@ -179,7 +179,6 @@ class WhatsAppService {
               data: { status: 'DONE', progress: 100 },
             });
 
-            // إلغاء تذكير المهمة من طابور Redis لكونها اكتملت
             await cancelTaskReminder(assignedTask.id);
 
             await this.sock?.sendMessage(senderJid, {
@@ -198,28 +197,28 @@ class WhatsAppService {
           continue;
         }
 
-        // 2. إذا كان المرسل شخصاً آخر غريباً
-        if (!isOwner && ownerPhone) {
-          console.log(`ℹ️ تم تجاهل رسالة من جهة اتصال شخصية [${senderDigits}]: "${cleanText}"`);
+        // 2. قفل أمني حصري: إذا كان رقم المالك مسجلاً وكان المرسل ليس المالك -> تجاهل تام وفوري
+        if (ownerPhone && !isOwner) {
+          console.log(`🔒 تم تجاهل رسالة من رقم غير مصرح له: [${senderDigits}]`);
           continue;
         }
 
         // 3. التحقق من وجود نية صريحة لإنشاء/إدارة مهمة للمالك
-        const hasTaskIntent = /^(مهمه|مهمة|ذكر|ذَكِّر|ذكرني|سجل|أضف|اضف|كلف|كلّف|بلغ|بلّغ|أخبر|اخبر|خبر|قل لـ?|قول لـ?|خلي|خلّي|وصي|وصّي|ارسل لـ?|أرسل لـ?|ايش عندي|شو عندي|جدولي|جدول المهام|المهام|تحديث المهمة)/i.test(cleanText);
+        const hasTaskIntent = /^(مهمه|مهمة|ذكر|ذَكِّر|ذكرني|سجل|أضف|اضف|كلف|كلّف|بلغ|بلّغ|أخبر|اخبر|خبر|قل لـ?|قول لـ?|خلي|خلّي|وصي|وصّي|ارسل لـ?|أرسل لـ?|ايش عندي|شو عندي|جدولي|جدول المهام|المهام|تحديث المهمة)/i.test(cleanText);
 
         if (!hasTaskIntent) {
-          console.log(`ℹ️ تم تجاهل رسالة عادية لا تحتوي على أمر مهمة: "${cleanText}"`);
+          console.log(`ℹ️ رسالة عادية من المالك لا تحتوي على أمر مهمة: "${cleanText}"`);
           continue;
         }
 
-        console.log(`🎯 جاري معالجة أمر مهمة صريح: "${cleanText}"`);
+        console.log(`🎯 معالجة أمر من المالك: "${cleanText}"`);
         try {
           const replyText = await processUserMessage(senderJid, cleanText);
           if (replyText && this.sock) {
             await this.sock.sendMessage(senderJid, { text: replyText }, { quoted: msg });
           }
         } catch (err) {
-          console.error('خطأ أثناء معالجة رسالة المهمة:', err);
+          console.error('خطأ أثناء معالجة رسالة المالك:', err);
         }
       }
     });
