@@ -55,13 +55,11 @@ router.delete('/tasks/:id', async (req: Request, res: Response) => {
 });
 
 // ==========================================
-// مسارات العادات ونظام النقاط والمكافآت (Habits & Gamification)
+// مسارات العادات والمكافآت (Habits & Gamification)
 // ==========================================
 
-// جلب العادات ورصيد النقاط مع تهيئة البيانات الأولية تلقائياً
 router.get('/habits', async (req: Request, res: Response) => {
   try {
-    // التحقق من وجود عادات، وتغذيتها تلقائياً إن كانت فارغة
     const count = await prisma.habit.count();
     if (count === 0) {
       await prisma.habit.createMany({
@@ -82,27 +80,22 @@ router.get('/habits', async (req: Request, res: Response) => {
       });
     }
 
-    // بداية تاريخ اليوم
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const habits = await prisma.habit.findMany({
       include: {
-        logs: {
-          where: { date: { gte: today } },
-        },
+        logs: { where: { date: { gte: today } } },
       },
       orderBy: { createdAt: 'asc' },
     });
 
-    // احتساب مجموع النقاط المكتسبة
     const totalLogs = await prisma.habitLog.findMany({
       where: { completed: true },
       include: { habit: true },
     });
     const earned = totalLogs.reduce((acc, log) => acc + (log.habit?.points || 0), 0);
 
-    // احتساب النقاط المستهلكة في المكافآت
     const claimedRewards = await prisma.reward.findMany({
       where: { isClaimed: true },
     });
@@ -113,12 +106,10 @@ router.get('/habits', async (req: Request, res: Response) => {
       pointsBalance: Math.max(0, earned - spent),
     });
   } catch (error) {
-    console.error('خطأ في جلب العادات:', error);
     res.status(500).json({ error: 'فشل جلب العادات' });
   }
 });
 
-// تسجيل إنجاز عادة يومية (Toggle)
 router.post('/habits/:id/toggle', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -134,11 +125,7 @@ router.post('/habits/:id/toggle', async (req: Request, res: Response) => {
       res.json({ status: 'uncompleted' });
     } else {
       await prisma.habitLog.create({
-        data: {
-          habitId: id,
-          date: today,
-          completed: true,
-        },
+        data: { habitId: id, date: today, completed: true },
       });
       res.json({ status: 'completed' });
     }
@@ -147,7 +134,6 @@ router.post('/habits/:id/toggle', async (req: Request, res: Response) => {
   }
 });
 
-// جلب قائمة المكافآت
 router.get('/rewards', async (req: Request, res: Response) => {
   try {
     const rewards = await prisma.reward.findMany({
@@ -159,7 +145,6 @@ router.get('/rewards', async (req: Request, res: Response) => {
   }
 });
 
-// استبدال مكافأة بالنقاط
 router.post('/rewards/:id/claim', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -174,6 +159,76 @@ router.post('/rewards/:id/claim', async (req: Request, res: Response) => {
     res.json({ success: true, message: `صحتين وهنا! استمتع بـ ${reward.title}` });
   } catch (error) {
     res.status(500).json({ error: 'فشل استبدال المكافأة' });
+  }
+});
+
+// ==========================================
+// مسارات فريق الوكلاء الذكي (Multi-Agent Team)
+// ==========================================
+
+router.get('/agents', async (req: Request, res: Response) => {
+  try {
+    // حقن الوكلاء الأساسيين تلقائياً عند أول تشغيل
+    const count = await prisma.agent.count();
+    if (count === 0) {
+      await prisma.agent.createMany({
+        data: [
+          {
+            name: 'المدير المالي التنفيذي',
+            role: 'FINANCIAL',
+            description: 'إدارة المصاريف والالتزامات الشهرية والسنوية والتخطيط المالي المبكر.',
+            systemPrompt: 'أنت مستشار مالي تنفيذي شخصي تحرص على تنظيم الميزانيات، تخفيض النفقات غير الضرورية، وتنبيه المدير مبكراً قبل حلول الالتزامات المالية الكبيرة.',
+            provider: 'TOGETHER',
+            canSearchWeb: false,
+          },
+          {
+            name: 'وكيل أبحاث السوق والعملات الرقمية',
+            role: 'CRYPTO',
+            description: 'رصد توقعات الخبراء للعملات الرقمية وأخبار الأسواق الصاعدة.',
+            systemPrompt: 'أنت خبير أبحاث في البلوكشين والعملات الرقمية ترصد ترشيحات كبار المحللين، الأهداف السعرية المتوقعة، وتحذر من المخاطر.',
+            provider: 'TOGETHER',
+            canSearchWeb: true,
+          },
+          {
+            name: 'وكيل الاستكشاف والبحث الشامل',
+            role: 'RESEARCHER',
+            description: 'إجراء بحوث معمقة وتلخيص التقارير والمواضيع المخصصة بطلبك.',
+            systemPrompt: 'أنت باحث أكاديمي وعملي متخصص في إعداد ملخصات شاملة ومباشرة مدعمة بالحقائق والنقاط التنفيذية لأي موضوع يُطلب منك.',
+            provider: 'TOGETHER',
+            canSearchWeb: true,
+          },
+        ],
+      });
+    }
+
+    const agents = await prisma.agent.findMany({
+      orderBy: { createdAt: 'asc' },
+    });
+    res.json(agents);
+  } catch (error) {
+    res.status(500).json({ error: 'فشل جلب الوكلاء' });
+  }
+});
+
+// تحديث مفتاح API أو إعدادات وكيل
+router.put('/agents/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { apiKey, provider, isActive, canSearchWeb } = req.body;
+
+    const updated = await prisma.agent.update({
+      where: { id },
+      data: {
+        apiKey: apiKey || null,
+        provider: provider || 'TOGETHER',
+        isActive: isActive !== undefined ? isActive : true,
+        canSearchWeb: canSearchWeb !== undefined ? canSearchWeb : false,
+      },
+    });
+
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ error: 'فشل تحديث إعدادات الوكيل' });
   }
 });
 
