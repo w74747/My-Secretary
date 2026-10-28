@@ -11,7 +11,7 @@ import {
 const router = Router();
 
 // ==========================================
-// مسارات المهام (Tasks)
+// 1. مسارات المهام (Tasks)
 // ==========================================
 
 router.get('/tasks', async (req: Request, res: Response) => {
@@ -67,7 +67,7 @@ router.delete('/tasks/:id', async (req: Request, res: Response) => {
 });
 
 // ==========================================
-// مسارات العادات ونظام النقاط والمكافآت (Habits & Gamification)
+// 2. مسارات العادات والمكافآت (Habits & Gamification)
 // ==========================================
 
 router.get('/habits', async (req: Request, res: Response) => {
@@ -175,7 +175,7 @@ router.post('/rewards/:id/claim', async (req: Request, res: Response) => {
 });
 
 // ==========================================
-// مسارات فريق الوكلاء الذكي (Multi-Agent Team)
+// 3. مسارات فريق الوكلاء الذكي (Multi-Agent Team)
 // ==========================================
 
 router.get('/agents', async (req: Request, res: Response) => {
@@ -224,7 +224,7 @@ router.get('/agents', async (req: Request, res: Response) => {
 router.put('/agents/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { apiKey, provider, isActive, canSearchWeb } = req.body;
+    const { apiKey, provider, isActive, canSearchWeb, systemPrompt } = req.body;
 
     const updated = await prisma.agent.update({
       where: { id },
@@ -233,6 +233,7 @@ router.put('/agents/:id', async (req: Request, res: Response) => {
         provider: provider || 'TOGETHER',
         isActive: isActive !== undefined ? isActive : true,
         canSearchWeb: canSearchWeb !== undefined ? canSearchWeb : false,
+        systemPrompt: systemPrompt !== undefined ? systemPrompt : undefined,
       },
     });
 
@@ -243,7 +244,7 @@ router.put('/agents/:id', async (req: Request, res: Response) => {
 });
 
 // ==========================================
-// مسار خريطة الأفكار والعلاقات (Mind Map Graph)
+// 4. مسار خريطة الأفكار والعلاقات (Mind Map Graph)
 // ==========================================
 
 router.get('/mindmap', async (req: Request, res: Response) => {
@@ -306,7 +307,7 @@ router.get('/mindmap', async (req: Request, res: Response) => {
 });
 
 // ==========================================
-// مسارات ربط Google Calendar الرسمي (OAuth 2.0)
+// 5. مسارات ربط Google Calendar الرسمي (OAuth 2.0)
 // ==========================================
 
 router.get('/auth/google', (req: Request, res: Response) => {
@@ -334,7 +335,7 @@ router.get('/auth/google/callback', async (req: Request, res: Response) => {
         <body>
           <div class="card">
             <h2 style="color:#15803D;">✅ تم ربط حساب Google Calendar بنجاح!</h2>
-            <p style="color:#64748B; font-size:14px;">تتم الآن مزامنة كافة المهام وتعديلاتها تلقائياً مع تقويم هاتفك وجوجل.</p>
+            <p style="color:#64748B; font-size:14px;">تتم الآن مزامنة كافة المهام وتعديلاتها تلقائياً مع تقويمك الشخصي.</p>
             <script>
               setTimeout(() => {
                 if (window.opener) {
