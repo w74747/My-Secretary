@@ -7,7 +7,7 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_REDIRECT_URI || 'https://my-secretary.up.railway.app/api/auth/google/callback'
 );
 
-// 1. توليد رابط تفويض الدخول الرسمي لحساب جوجل
+// 1. توليد رابط تفويض الدخول لتقويم جوجل فقط
 export function getGoogleAuthUrl(): string {
   const scopes = [
     'https://www.googleapis.com/auth/calendar.events',
@@ -20,7 +20,7 @@ export function getGoogleAuthUrl(): string {
   });
 }
 
-// 2. استقبال كود التفويض وحفظ الرموز
+// 2. حفظ رموز المصادقة بعد موافقة المستخدم
 export async function saveGoogleTokensFromCode(code: string): Promise<void> {
   const { tokens } = await oauth2Client.getToken(code);
   if (!tokens.access_token) throw new Error('فشل جلب الرمز المميز');
@@ -41,7 +41,7 @@ export async function saveGoogleTokensFromCode(code: string): Promise<void> {
   });
 }
 
-// 3. استرجاع اتصال Google Calendar معتمد
+// 3. استرجاع اتصال معتمد لتقويم جوجل
 async function getAuthenticatedCalendar() {
   const authRecord = await prisma.googleAuth.findUnique({
     where: { id: 'default_user' },
@@ -51,13 +51,13 @@ async function getAuthenticatedCalendar() {
 
   oauth2Client.setCredentials({
     access_token: authRecord.accessToken,
-    refresh_token: authRecord.refreshToken,
+    refreshToken: authRecord.refreshToken,
   });
 
   return google.calendar({ version: 'v3', auth: oauth2Client });
 }
 
-// 4. إضافة مهمة جديدة مباشرة إلى تقويم جوجل
+// 4. مزامنة وإضافة مهمة جديدة إلى تقويم جوجل
 export async function syncTaskToGoogleCalendar(task: {
   id: string;
   title: string;
@@ -96,7 +96,7 @@ export async function syncTaskToGoogleCalendar(task: {
   }
 }
 
-// 5. حذف مهمة من تقويم جوجل عند حذفها من النظام
+// 5. حذف مهمة من تقويم جوجل
 export async function deleteTaskFromGoogleCalendar(googleEventId: string): Promise<void> {
   try {
     const calendar = await getAuthenticatedCalendar();
