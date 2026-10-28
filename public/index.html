@@ -1,571 +1,323 @@
 <!DOCTYPE html>
-<html dir="rtl" lang="ar">
+<html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>لوحة تحكم السكرتير الذكي</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>السكرتير التنفيذي الذكي | لوحة المهام</title>
+  <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <!-- Google Fonts: Cairo -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
-    body { font-family: 'Cairo', sans-serif; background-color: #F8FAFC; }
+    body {
+      font-family: 'Cairo', sans-serif;
+    }
+    /* تخصيص شريط التمرير الناعم */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #F1F5F9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94A3B8;
+    }
   </style>
 </head>
-<body class="text-slate-800 antialiased min-h-screen flex flex-col">
+<body class="bg-[#F5F6FA] text-[#1E293B] antialiased h-screen overflow-hidden flex">
 
-  <!-- شريط التنقل العلوي مع فحص الاتصال الحقيقي -->
-  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center text-xl shadow-md shadow-emerald-100">
-          <i class="fa-solid fa-robot"></i>
-        </div>
-        <div>
-          <h1 class="text-lg font-bold text-slate-900 leading-tight">السكرتير التنفيذي الذكي</h1>
-          <p class="text-xs text-slate-500">إدارة ومتابعة المهام والتنبيهات</p>
-        </div>
-      </div>
-
-      <div class="flex items-center gap-3">
-        <!-- شارة الحالة الحية للواتساب -->
-        <div id="connectionBadge" class="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200 transition">
-          <span id="connectionDot" class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
-          <span id="connectionText">جاري فحص الاتصال...</span>
-        </div>
-        <button id="logoutBtn" onclick="disconnectWhatsApp()" class="hidden px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-xl transition items-center gap-1.5">
-          <i class="fa-solid fa-arrow-right-from-bracket"></i>
-          <span>إنهاء الاتصال</span>
-        </button>
-      </div>
+  <!-- 1. الشريط الجانبي الأيقوني الأساسي (Dark Indigo) -->
+  <aside class="w-16 bg-[#4338CA] flex flex-col items-center py-6 gap-6 text-white/70 select-none z-20 shadow-lg">
+    <div class="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center text-white font-extrabold text-lg shadow-inner">
+      س
     </div>
-  </header>
-
-  <!-- تنبيه يظهر أعلى الشاشة إذا كان الواتساب يحتاج مسح كود -->
-  <div id="qrBanner" class="hidden bg-amber-500 text-white px-4 py-3 text-center text-sm font-bold shadow-md cursor-pointer hover:bg-amber-600 transition" onclick="openQrModal()">
-    ⚠️ خدمة واتساب غير متصلة حالياً! اضغط هنا لمسح رمز QR وتفعيل الإشعارات والتذكيرات فوراً.
-  </div>
-
-  <!-- المحتوى الرئيسي -->
-  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-
-    <!-- الإحصائيات -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
-        <div>
-          <p class="text-xs font-semibold text-slate-400">إجمالي المهام</p>
-          <h3 id="statTotal" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
-        </div>
-        <div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-lg">
-          <i class="fa-solid fa-list-check"></i>
-        </div>
-      </div>
-
-      <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
-        <div>
-          <p class="text-xs font-semibold text-slate-400">قيد التنفيذ</p>
-          <h3 id="statInProgress" class="text-2xl font-bold text-amber-600 mt-1">0</h3>
-        </div>
-        <div class="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-lg">
-          <i class="fa-solid fa-spinner fa-spin-pulse"></i>
-        </div>
-      </div>
-
-      <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
-        <div>
-          <p class="text-xs font-semibold text-slate-400">المهام المكتملة</p>
-          <h3 id="statDone" class="text-2xl font-bold text-emerald-600 mt-1">0</h3>
-        </div>
-        <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg">
-          <i class="fa-solid fa-check-double"></i>
-        </div>
-      </div>
-
-      <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
-        <div>
-          <p class="text-xs font-semibold text-slate-400">مهام عاجلة</p>
-          <h3 id="statUrgent" class="text-2xl font-bold text-rose-600 mt-1">0</h3>
-        </div>
-        <div class="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center text-lg">
-          <i class="fa-solid fa-fire"></i>
-        </div>
-      </div>
+    <nav class="flex flex-col gap-3 mt-4">
+      <button title="لوحة المهام" class="p-3 rounded-2xl bg-white/20 text-white transition shadow-sm">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+      </button>
+      <button title="جهات الاتصال" class="p-3 rounded-2xl hover:bg-white/10 hover:text-white transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+      </button>
+      <button onclick="fetchTasks()" title="تحديث البيانات" class="p-3 rounded-2xl hover:bg-white/10 hover:text-white transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+      </button>
+    </nav>
+    <div class="mt-auto">
+      <button onclick="logoutWhatsApp()" title="إنهاء اتصال واتساب" class="p-3 rounded-2xl hover:bg-red-500/20 hover:text-red-300 transition text-white/50">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+      </button>
     </div>
+  </aside>
 
-    <!-- شريط التحكم وزر الإضافة -->
-    <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+  <!-- 2. مساحة العرض الرئيسية -->
+  <div class="flex-1 flex flex-col h-screen overflow-hidden">
+    
+    <!-- رأس الصفحة العلوي (Header) -->
+    <header class="bg-white/80 backdrop-blur-md border-b border-slate-100 px-8 py-5 flex justify-between items-center z-10">
       <div>
-        <h2 class="text-xl font-extrabold text-slate-900">لوحة تتبع المهام المرئية</h2>
-        <p class="text-xs text-slate-500 mt-0.5">لوحة ذكية لعرض ومتابعة مراحل إنجاز الأعمال وإرسال التنبيهات المجدولة</p>
+        <h1 class="text-xl font-bold text-[#1E293B]">السكرتير التنفيذي الذكي</h1>
+        <p class="text-xs text-[#64748B] mt-0.5" id="completion-summary">جاري تحميل المهام والبيانات...</p>
       </div>
-      <div class="flex items-center gap-2 w-full sm:w-auto">
-        <button onclick="loadTasks()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-xl transition flex items-center gap-2">
-          <i class="fa-solid fa-rotate-right"></i> تحديث اللوحة
+
+      <div class="flex items-center gap-4">
+        <!-- مؤشر اتصال الواتساب الناعم -->
+        <div id="wa-status-badge" class="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 transition">
+          <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+          <span>جاري فحص الاتصال...</span>
+        </div>
+
+        <!-- زر إضافة مهمة جديدة -->
+        <button onclick="openNewTaskModal()" class="bg-[#1E293B] text-white px-4 py-2 rounded-2xl text-xs font-semibold shadow-sm hover:opacity-90 transition flex items-center gap-1.5">
+          <span>+ إضافة مهمة جديدة</span>
         </button>
-        <button onclick="openCreateModal()" class="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold rounded-xl shadow-md transition flex items-center gap-2">
-          <i class="fa-solid fa-plus"></i> مهمة جديدة
-        </button>
       </div>
-    </div>
+    </header>
 
-    <!-- أعمدة مراحل العمل -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <!-- في الانتظار -->
-      <div class="bg-slate-100/70 p-4 rounded-2xl border border-slate-200 flex flex-col">
-        <div class="flex items-center justify-between mb-4">
-          <span class="font-bold text-slate-700 flex items-center gap-2">
-            <span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span> في الانتظار
-          </span>
-          <span id="countTodo" class="text-xs font-bold bg-white text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">0</span>
+    <!-- منطقة محتوى الكانبان (Scrollable) -->
+    <main class="flex-1 p-8 overflow-x-auto overflow-y-hidden">
+      <div class="flex gap-6 h-full items-start">
+
+        <!-- عمود: قيد الانتظار (To Do) -->
+        <div class="w-88 min-w-[22rem] max-w-[22rem] flex flex-col max-h-full">
+          <div class="flex items-center justify-between mb-4 px-2">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
+              <h2 class="font-bold text-sm text-[#1E293B]">في الانتظار</h2>
+              <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600" id="count-todo">0</span>
+            </div>
+          </div>
+          <div id="col-todo" class="flex-1 overflow-y-auto flex flex-col gap-4 pr-1 pl-1">
+            <!-- البطاقات تضاف برمجياً -->
+          </div>
         </div>
-        <div id="colTodo" class="space-y-3 flex-1 overflow-y-auto max-h-[600px]"></div>
-      </div>
 
-      <!-- جاري التنفيذ -->
-      <div class="bg-slate-100/70 p-4 rounded-2xl border border-slate-200 flex flex-col">
-        <div class="flex items-center justify-between mb-4">
-          <span class="font-bold text-slate-700 flex items-center gap-2">
-            <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> جاري التنفيذ
-          </span>
-          <span id="countInProgress" class="text-xs font-bold bg-white text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">0</span>
+        <!-- عمود: جاري التنفيذ (In Progress) -->
+        <div class="w-88 min-w-[22rem] max-w-[22rem] flex flex-col max-h-full">
+          <div class="flex items-center justify-between mb-4 px-2">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+              <h2 class="font-bold text-sm text-[#1E293B]">جاري التنفيذ</h2>
+              <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600" id="count-inprogress">0</span>
+            </div>
+          </div>
+          <div id="col-inprogress" class="flex-1 overflow-y-auto flex flex-col gap-4 pr-1 pl-1">
+            <!-- البطاقات تضاف برمجياً -->
+          </div>
         </div>
-        <div id="colInProgress" class="space-y-3 flex-1 overflow-y-auto max-h-[600px]"></div>
-      </div>
 
-      <!-- مكتملة -->
-      <div class="bg-slate-100/70 p-4 rounded-2xl border border-slate-200 flex flex-col">
-        <div class="flex items-center justify-between mb-4">
-          <span class="font-bold text-slate-700 flex items-center gap-2">
-            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> مكتملة
-          </span>
-          <span id="countDone" class="text-xs font-bold bg-white text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">0</span>
+        <!-- عمود: مكتملة (Done) -->
+        <div class="w-88 min-w-[22rem] max-w-[22rem] flex flex-col max-h-full">
+          <div class="flex items-center justify-between mb-4 px-2">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+              <h2 class="font-bold text-sm text-[#1E293B]">المكتملة</h2>
+              <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600" id="count-done">0</span>
+            </div>
+          </div>
+          <div id="col-done" class="flex-1 overflow-y-auto flex flex-col gap-4 pr-1 pl-1">
+            <!-- البطاقات تضاف برمجياً -->
+          </div>
         </div>
-        <div id="colDone" class="space-y-3 flex-1 overflow-y-auto max-h-[600px]"></div>
-      </div>
-    </div>
-  </main>
 
-  <!-- نافذة مسح الرمز QR إذا كان غير متصل -->
-  <div id="qrModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
-    <div class="bg-white rounded-2xl max-w-sm w-full p-6 text-center space-y-4 shadow-2xl">
-      <h3 class="font-bold text-lg text-slate-900">ربط واتساب بالسيرفر</h3>
-      <p class="text-xs text-slate-500">افتح واتساب في هاتفك > الأجهزة المرتبطة > ربط جهاز، وامسح الرمز أدناه:</p>
-      <div class="flex justify-center">
-        <img id="qrImage" src="" alt="كود QR" class="w-64 h-64 border border-slate-200 rounded-xl p-2">
       </div>
-      <button onclick="closeQrModal()" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs">إغلاق</button>
+    </main>
+  </div>
+
+  <!-- نافذة منبثقة لمسح QR Code عند انقطاع الاتصال -->
+  <div id="qr-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+    <div class="bg-white p-7 rounded-3xl shadow-[0_10px_40px_rgba(0,0,0,0.06)] border border-slate-100 max-w-sm w-full mx-4 flex flex-col items-center gap-4 text-center">
+      <h3 class="font-bold text-base text-[#1E293B]">ربط خدمة واتساب</h3>
+      <p class="text-xs text-[#64748B]">امسح الرمز التالي بكاميرا واتساب بهاتفك لمزامنة السكرتير</p>
+      <div id="qr-container" class="w-56 h-56 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-center overflow-hidden">
+        <span class="text-xs text-slate-400">جاري تحميل رمز الاستجابة السريعة...</span>
+      </div>
+      <button onclick="closeQrModal()" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">
+        إغلاق
+      </button>
     </div>
   </div>
 
-  <!-- نافذة إضافة / تعديل المهمة -->
-  <div id="taskModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
-    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto">
-      <div class="flex items-center justify-between mb-4">
-        <h3 id="modalTitle" class="font-bold text-lg text-slate-900">إضافة مهمة وتحديد التذكير</h3>
-        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 text-lg"><i class="fa-solid fa-xmark"></i></button>
-      </div>
-      
-      <form id="taskForm" onsubmit="handleFormSubmit(event)" class="space-y-4">
-        <input type="hidden" id="taskIdInput">
-
-        <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">عنوان المهمة أو الهدف *</label>
-          <input type="text" id="taskTitleInput" required class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none" placeholder="مثال: تسليم عينة The Ribs">
-        </div>
-        
-        <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">تفاصيل وملاحظات</label>
-          <textarea id="taskDescInput" rows="2" class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none" placeholder="المعايير أو الملاحظات المطلوبة..."></textarea>
-        </div>
-
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">المكلف بالمهمة</label>
-            <input type="text" id="taskAssigneeNameInput" class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none" placeholder="مثال: أحمد">
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">رقم واتساب المكلف (اختياري)</label>
-            <input type="tel" id="taskAssigneePhoneInput" class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none" placeholder="96891234567">
-          </div>
-        </div>
-
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">تاريخ ووقت الاستحقاق *</label>
-            <input type="datetime-local" id="taskDueDateInput" required class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none">
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">درجة الأهمية</label>
-            <select id="taskPriorityInput" class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none">
-              <option value="LOW">منخفضة</option>
-              <option value="MEDIUM" selected>متوسطة</option>
-              <option value="HIGH">مرتفعة</option>
-              <option value="URGENT">عاجلة جداً 🚨</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- إعدادات التذكير -->
-        <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-          <div class="flex items-center gap-2 text-xs font-bold text-slate-800">
-            <i class="fa-regular fa-bell text-emerald-600"></i>
-            <span>إعدادات التذكير والتنبيه التلقائي عبر واتساب</span>
-          </div>
-
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block text-[11px] font-semibold text-slate-500 mb-1">نوع وموعد التذكير</label>
-              <select id="reminderTypeInput" onchange="toggleReminderOptions()" class="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
-                <option value="NONE">بدون تذكير آلي</option>
-                <option value="EXACT">في نفس وقت الموعد تماماً</option>
-                <option value="BEFORE" selected>قبل الموعد بمقدار محدد</option>
-                <option value="EVERY_X_HOURS">تكرار دوري (كل عدد ساعات)</option>
-              </select>
-            </div>
-
-            <div id="reminderOffsetContainer">
-              <label id="reminderOffsetLabel" class="block text-[11px] font-semibold text-slate-500 mb-1">المدة</label>
-              <select id="reminderOffsetInput" class="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
-                <option value="15">15 دقيقة</option>
-                <option value="30">30 دقيقة</option>
-                <option value="60" selected>ساعة واحدة</option>
-                <option value="120">ساعتين</option>
-                <option value="1440">يوم كامل</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="flex items-center gap-2 pt-1">
-            <input type="checkbox" id="repeatDailyInput" class="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500">
-            <label for="repeatDailyInput" class="text-xs font-semibold text-slate-600 cursor-pointer">تكرار التنبيه يومياً حتى يتم إنجاز المهمة</label>
-          </div>
-        </div>
-
-        <div class="pt-2 flex items-center justify-end gap-2">
-          <button type="button" onclick="closeModal()" class="px-4 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100 rounded-xl">إلغاء</button>
-          <button type="submit" class="px-5 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow">حفظ والتفعيل</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
+  <!-- سكريبت التشغيل وربط البيانات -->
   <script>
-    let allTasksCache = [];
-    let currentQrCode = null;
+    let currentTasks = [];
 
-    // فحص دوري لحالة الاتصال الحقيقية بواتساب
     async function checkWhatsAppStatus() {
       try {
         const res = await fetch('/api/whatsapp/status');
         const data = await res.json();
-
-        const badge = document.getElementById('connectionBadge');
-        const dot = document.getElementById('connectionDot');
-        const text = document.getElementById('connectionText');
-        const banner = document.getElementById('qrBanner');
-        const logoutBtn = document.getElementById('logoutBtn');
-
-        currentQrCode = data.qrCode;
-
+        const badge = document.getElementById('wa-status-badge');
+        
         if (data.isConnected) {
-          badge.className = "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200";
-          dot.className = "w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse";
-          text.innerText = "واتساب متصل ومفعل";
-          banner.classList.add('hidden');
-          logoutBtn.classList.remove('hidden');
-          logoutBtn.classList.add('flex');
+          badge.className = 'flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-[#DCFCE7] text-[#15803D] border border-emerald-200 transition';
+          badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500"></span><span>واتساب متصل ومفعّل</span>';
         } else {
-          badge.className = "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 cursor-pointer";
-          badge.onclick = openQrModal;
-          dot.className = "w-2.5 h-2.5 rounded-full bg-amber-500";
-          text.innerText = "غير متصل (اضغط للمسح)";
-          banner.classList.remove('hidden');
-          logoutBtn.classList.add('hidden');
-
-          if (data.qrCode) {
-            document.getElementById('qrImage').src = data.qrCode;
-          }
+          badge.className = 'cursor-pointer flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-[#FFEDD5] text-[#C2410C] border border-amber-200 transition hover:bg-amber-100';
+          badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span><span>غير متصل (اضغط للمسح)</span>';
+          badge.onclick = () => showQrModal(data.qrCode);
         }
       } catch (err) {
-        console.error('خطأ فحص اتصال واتساب:', err);
+        console.error('فشل جلب حالة الواتساب:', err);
       }
     }
 
-    function openQrModal() {
-      if (currentQrCode) {
-        document.getElementById('qrImage').src = currentQrCode;
-        document.getElementById('qrModal').classList.remove('hidden');
-        document.getElementById('qrModal').classList.add('flex');
-      } else {
-        alert('جاري توليد رمز الـ QR من السيرفر، يرجى الانتظار ثوانٍ معدودة...');
+    function showQrModal(qrData) {
+      const modal = document.getElementById('qr-modal');
+      const container = document.getElementById('qr-container');
+      modal.classList.remove('hidden');
+      if (qrData) {
+        container.innerHTML = `<img src="${qrData}" class="w-full h-full object-contain p-2" alt="QR Code" />`;
       }
     }
 
     function closeQrModal() {
-      document.getElementById('qrModal').classList.add('hidden');
-      document.getElementById('qrModal').classList.remove('flex');
+      document.getElementById('qr-modal').classList.add('hidden');
     }
 
-    function toggleReminderOptions() {
-      const type = document.getElementById('reminderTypeInput').value;
-      const container = document.getElementById('reminderOffsetContainer');
-      const offsetInput = document.getElementById('reminderOffsetInput');
-      const offsetLabel = document.getElementById('reminderOffsetLabel');
-
-      if (type === 'BEFORE') {
-        container.classList.remove('hidden');
-        offsetLabel.innerText = "التذكير قبل الموعد بـ:";
-        offsetInput.innerHTML = `
-          <option value="15">15 دقيقة</option>
-          <option value="30">30 دقيقة</option>
-          <option value="60" selected>ساعة واحدة</option>
-          <option value="120">ساعتين</option>
-          <option value="1440">يوم كامل</option>
-        `;
-      } else if (type === 'EVERY_X_HOURS') {
-        container.classList.remove('hidden');
-        offsetLabel.innerText = "إرسال تذكير كل:";
-        offsetInput.innerHTML = `
-          <option value="1">كل ساعة</option>
-          <option value="2">كل ساعتين</option>
-          <option value="4" selected>كل 4 ساعات</option>
-          <option value="6">كل 6 ساعات</option>
-          <option value="12">كل 12 ساعة</option>
-        `;
-      } else {
-        container.classList.add('hidden');
-      }
-    }
-
-    async function loadTasks() {
-      try {
-        const res = await fetch('/api/tasks');
-        const tasks = await res.json();
-        allTasksCache = tasks;
-
-        const colTodo = document.getElementById('colTodo');
-        const colInProgress = document.getElementById('colInProgress');
-        const colDone = document.getElementById('colDone');
-
-        colTodo.innerHTML = '';
-        colInProgress.innerHTML = '';
-        colDone.innerHTML = '';
-
-        let todoCount = 0, inProgressCount = 0, doneCount = 0, urgentCount = 0;
-
-        tasks.forEach(task => {
-          if (task.priority === 'URGENT') urgentCount++;
-
-          const card = document.createElement('div');
-          card.className = "bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow transition space-y-3";
-
-          const priorityColors = {
-            LOW: 'bg-slate-100 text-slate-600',
-            MEDIUM: 'bg-blue-50 text-blue-700',
-            HIGH: 'bg-amber-50 text-amber-700',
-            URGENT: 'bg-rose-50 text-rose-700 border border-rose-200'
-          };
-
-          const priorityNames = {
-            LOW: 'منخفضة',
-            MEDIUM: 'متوسطة',
-            HIGH: 'مرتفعة',
-            URGENT: 'عاجلة جداً 🚨'
-          };
-
-          let formattedDateTime = 'بدون موعد تسليم';
-          if (task.dueDate) {
-            const d = new Date(task.dueDate);
-            formattedDateTime = d.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
-          }
-
-          card.innerHTML = `
-            <div class="flex items-start justify-between gap-2">
-              <h4 class="font-bold text-sm text-slate-900 leading-snug">${task.title}</h4>
-              <span class="text-[10px] font-bold px-2 py-0.5 rounded-md ${priorityColors[task.priority] || 'bg-slate-100'} whitespace-nowrap">
-                ${priorityNames[task.priority] || task.priority}
-              </span>
-            </div>
-
-            ${task.description ? `<p class="text-xs text-slate-500 line-clamp-2">${task.description}</p>` : ''}
-
-            <div class="flex items-center gap-2 flex-wrap">
-              ${task.assignee ? `
-                <div class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200/60 text-[11px] text-slate-600">
-                  <i class="fa-regular fa-user text-slate-400"></i>
-                  <span class="font-semibold">${task.assignee.name}</span>
-                </div>
-              ` : ''}
-
-              ${task.reminderType !== 'NONE' ? `
-                <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-semibold">
-                  <i class="fa-solid fa-bell text-[9px]"></i>
-                  <span>تذكير مفعل</span>
-                </div>
-              ` : ''}
-            </div>
-
-            <div>
-              <div class="flex justify-between text-[11px] font-semibold text-slate-400 mb-1">
-                <span>نسبة الإنجاز</span>
-                <span>${task.progress}%</span>
-              </div>
-              <div class="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                <div class="h-full bg-emerald-500 rounded-full" style="width: ${task.progress}%"></div>
-              </div>
-            </div>
-
-            <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
-              <span class="flex items-center gap-1">
-                <i class="fa-regular fa-clock text-[10px]"></i>
-                ${formattedDateTime}
-              </span>
-              <div class="flex items-center gap-1.5">
-                <button onclick="openEditModal('${task.id}')" title="تعديل الهدف والمواعيد" class="p-1 hover:text-blue-600 text-slate-400"><i class="fa-solid fa-pen-to-square text-sm"></i></button>
-                <button onclick="updateProgress('${task.id}', ${Math.min(100, task.progress + 25)})" title="زيادة الإنجاز (+25%)" class="p-1 hover:text-emerald-600 text-slate-400"><i class="fa-solid fa-plus-circle text-sm"></i></button>
-                <button onclick="deleteTask('${task.id}')" title="حذف المهمة" class="p-1 hover:text-rose-600 text-slate-400"><i class="fa-solid fa-trash-can text-sm"></i></button>
-              </div>
-            </div>
-          `;
-
-          if (task.status === 'DONE' || task.progress >= 100) {
-            doneCount++;
-            colDone.appendChild(card);
-          } else if (task.status === 'IN_PROGRESS' || task.progress > 0) {
-            inProgressCount++;
-            colInProgress.appendChild(card);
-          } else {
-            todoCount++;
-            colTodo.appendChild(card);
-          }
-        });
-
-        document.getElementById('statTotal').innerText = tasks.length;
-        document.getElementById('statInProgress').innerText = inProgressCount;
-        document.getElementById('statDone').innerText = doneCount;
-        document.getElementById('statUrgent').innerText = urgentCount;
-
-        document.getElementById('countTodo').innerText = todoCount;
-        document.getElementById('countInProgress').innerText = inProgressCount;
-        document.getElementById('countDone').innerText = doneCount;
-
-      } catch (err) {
-        console.error('خطأ أثناء جلب المهام:', err);
-      }
-    }
-
-    function openCreateModal() {
-      document.getElementById('taskForm').reset();
-      document.getElementById('taskIdInput').value = '';
-      document.getElementById('modalTitle').innerText = 'إضافة مهمة وتحديد التذكير';
-      toggleReminderOptions();
-      document.getElementById('taskModal').classList.remove('hidden');
-      document.getElementById('taskModal').classList.add('flex');
-    }
-
-    function openEditModal(taskId) {
-      const task = allTasksCache.find(t => t.id === taskId);
-      if (!task) return;
-
-      document.getElementById('taskIdInput').value = task.id;
-      document.getElementById('modalTitle').innerText = 'تعديل المهمة ومواعيد التذكير';
-      document.getElementById('taskTitleInput').value = task.title;
-      document.getElementById('taskDescInput').value = task.description || '';
-      document.getElementById('taskPriorityInput').value = task.priority;
-
-      if (task.dueDate) {
-        const d = new Date(task.dueDate);
-        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-        document.getElementById('taskDueDateInput').value = d.toISOString().slice(0, 16);
-      }
-
-      document.getElementById('taskAssigneeNameInput').value = task.assignee?.name || '';
-      document.getElementById('taskAssigneePhoneInput').value = task.assignee?.phoneNumber || '';
-
-      document.getElementById('reminderTypeInput').value = task.reminderType || 'NONE';
-      toggleReminderOptions();
-      document.getElementById('reminderOffsetInput').value = task.reminderOffset || '60';
-      document.getElementById('repeatDailyInput').checked = Boolean(task.repeatDaily);
-
-      document.getElementById('taskModal').classList.remove('hidden');
-      document.getElementById('taskModal').classList.add('flex');
-    }
-
-    function closeModal() {
-      document.getElementById('taskModal').classList.add('hidden');
-      document.getElementById('taskModal').classList.remove('flex');
-    }
-
-    async function handleFormSubmit(e) {
-      e.preventDefault();
-      const id = document.getElementById('taskIdInput').value;
-      const title = document.getElementById('taskTitleInput').value;
-      const description = document.getElementById('taskDescInput').value;
-      const priority = document.getElementById('taskPriorityInput').value;
-      
-      // تحويل التاريخ لصيغة ISO كاملة مع مراعاة المنطقة الزمنية للمستخدم
-      const rawDate = document.getElementById('taskDueDateInput').value;
-      const dueDate = rawDate ? new Date(rawDate).toISOString() : null;
-
-      const assigneeName = document.getElementById('taskAssigneeNameInput').value;
-      const assigneePhone = document.getElementById('taskAssigneePhoneInput').value;
-      const reminderType = document.getElementById('reminderTypeInput').value;
-      const reminderOffset = document.getElementById('reminderOffsetInput').value;
-      const repeatDaily = document.getElementById('repeatDailyInput').checked;
-
-      const payload = {
-        title, description, priority, dueDate,
-        assigneeName, assigneePhone,
-        reminderType, reminderOffset, repeatDaily
-      };
-
-      if (id) {
-        await fetch('/api/tasks/' + id, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-      } else {
-        await fetch('/api/tasks', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-      }
-
-      closeModal();
-      loadTasks();
-    }
-
-    async function updateProgress(id, newProgress) {
-      const status = newProgress >= 100 ? 'DONE' : 'IN_PROGRESS';
-      await fetch('/api/tasks/' + id, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ progress: newProgress, status })
-      });
-      loadTasks();
-    }
-
-    async function deleteTask(id) {
-      if (!confirm('هل تريد حذف هذه المهمة بالتأكيد؟')) return;
-      await fetch('/api/tasks/' + id, { method: 'DELETE' });
-      loadTasks();
-    }
-
-    async function disconnectWhatsApp() {
-      if (!confirm('هل تريد إنهاء جلسة الواتساب الحالية ومسح كود جديد؟')) return;
+    async function logoutWhatsApp() {
+      if (!confirm('هل تريد بالتأكيد إنهاء جلسة الواتساب ومسح الرمز مجدداً؟')) return;
       try {
         await fetch('/api/whatsapp/logout', { method: 'POST' });
         checkWhatsAppStatus();
       } catch (e) {
-        alert('حدث خطأ أثناء إنهاء الاتصال.');
+        console.error(e);
       }
     }
 
-    loadTasks();
+    async function fetchTasks() {
+      try {
+        const res = await fetch('/api/tasks');
+        currentTasks = await res.json();
+        renderKanban();
+      } catch (e) {
+        console.error('فشل جلب المهام:', e);
+      }
+    }
+
+    function renderKanban() {
+      const colTodo = document.getElementById('col-todo');
+      const colInProgress = document.getElementById('col-inprogress');
+      const colDone = document.getElementById('col-done');
+
+      colTodo.innerHTML = '';
+      colInProgress.innerHTML = '';
+      colDone.innerHTML = '';
+
+      let countTodo = 0, countProg = 0, countDone = 0;
+
+      currentTasks.forEach(task => {
+        const card = createCardElement(task);
+        if (task.status === 'DONE' || task.progress === 100) {
+          colDone.appendChild(card);
+          countDone++;
+        } else if (task.status === 'IN_PROGRESS' || task.progress > 0) {
+          colInProgress.appendChild(card);
+          countProg++;
+        } else {
+          colTodo.appendChild(card);
+          countTodo++;
+        }
+      });
+
+      document.getElementById('count-todo').textContent = countTodo;
+      document.getElementById('count-inprogress').textContent = countProg;
+      document.getElementById('count-done').textContent = countDone;
+
+      const total = currentTasks.length;
+      const percent = total > 0 ? Math.round((countDone / total) * 100) : 0;
+      document.getElementById('completion-summary').textContent = `${percent}% نسبة الإنجاز الكلية (${countDone} من ${total} مهام)`;
+    }
+
+    function createCardElement(task) {
+      const card = document.createElement('div');
+      card.className = "w-full bg-white p-5 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100 flex flex-col gap-3 transition hover:shadow-md";
+
+      // شارات الأولوية والتكليف الناعمة
+      let priorityBadge = '';
+      if (task.priority === 'URGENT' || task.priority === 'HIGH') {
+        priorityBadge = `<span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-[#FEE2E2] text-[#B91C1C]">عاجلة</span>`;
+      } else {
+        priorityBadge = `<span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-[#FFEDD5] text-[#C2410C]">متوسطة</span>`;
+      }
+
+      let assigneeBadge = '';
+      if (task.assignee) {
+        assigneeBadge = `<span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-[#F3E8FF] text-[#7E22CE]">👤 ${task.assignee.name}</span>`;
+      }
+
+      // تنسيق التاريخ بتوقيت مسقط
+      let dateFormatted = 'بدون موعد';
+      if (task.dueDate) {
+        dateFormatted = new Intl.DateTimeFormat('ar-EG', {
+          timeZone: 'Asia/Muscat',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true
+        }).format(new Date(task.dueDate));
+      }
+
+      card.innerHTML = `
+        <div class="flex gap-2 flex-wrap items-center justify-between">
+          <div class="flex gap-1.5 flex-wrap">
+            ${priorityBadge}
+            ${assigneeBadge}
+          </div>
+          <button onclick="deleteTask('${task.id}')" title="حذف المهمة" class="text-slate-300 hover:text-red-500 text-xs transition">
+            ✕
+          </button>
+        </div>
+
+        <h3 class="font-bold text-sm text-[#1E293B] leading-snug">${escapeHtml(task.title)}</h3>
+        ${task.description ? `<p class="text-xs text-[#64748B] leading-relaxed line-clamp-2">${escapeHtml(task.description)}</p>` : ''}
+
+        <div class="mt-1 pt-2 border-t border-slate-50 flex flex-col gap-2">
+          <div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+            <div class="bg-[#4338CA] h-full rounded-full transition-all duration-300" style="width: ${task.progress}%"></div>
+          </div>
+          <div class="flex justify-between items-center text-xs text-[#94A3B8]">
+            <span class="flex items-center gap-1">⏰ ${dateFormatted}</span>
+            <span class="font-medium">${task.progress}%</span>
+          </div>
+        </div>
+      `;
+
+      return card;
+    }
+
+    async function deleteTask(id) {
+      if (!confirm('هل تريد بالتأكيد حذف هذه المهمة؟')) return;
+      try {
+        await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
+        fetchTasks();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/[&<>"']/g, m => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+      })[m]);
+    }
+
+    // التشغيل الدوري الأولي
     checkWhatsAppStatus();
-    setInterval(loadTasks, 5000);
-    setInterval(checkWhatsAppStatus, 5000);
+    fetchTasks();
+    setInterval(checkWhatsAppStatus, 15000);
+    setInterval(fetchTasks, 30000);
   </script>
 </body>
 </html>
