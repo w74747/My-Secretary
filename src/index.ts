@@ -14,8 +14,10 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
+// مسارات الـ API لإدارة المهام وجهات الاتصال
 app.use('/api', apiRoutes);
 
+// مسار لجلب حالة اتصال واتساب الحقيقية ورمز QR
 app.get('/api/whatsapp/status', (req: Request, res: Response) => {
   res.json({
     isConnected: whatsappService.isConnected,
@@ -23,6 +25,7 @@ app.get('/api/whatsapp/status', (req: Request, res: Response) => {
   });
 });
 
+// مسار إنهاء جلسة الواتساب ومسح الرمز يدوياً
 app.post('/api/whatsapp/logout', async (req: Request, res: Response) => {
   try {
     await whatsappService.logout();
@@ -32,20 +35,25 @@ app.post('/api/whatsapp/logout', async (req: Request, res: Response) => {
   }
 });
 
+// خدمة الملفات الثابتة الخاصة بالواجهة وتطبيق الـ PWA
 app.use(express.static(path.join(process.cwd(), 'public')));
 
+// المسار الرئيسي للوحة التحكم
 app.get('/', (req: Request, res: Response) => {
   res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
 });
 
+// بدء تشغيل الخادم والخدمات الملحقة
 app.listen(PORT, async () => {
   console.log(`🚀 السيرفر يعمل الآن بنجاح على المنفذ: ${PORT}`);
   try {
     console.log('🔄 جاري تشغيل ومزامنة خدمة واتساب...');
     await whatsappService.init();
 
-    // تشغيل نظام طابور التنبيهات عبر Redis ومزامنة التذكيرات القادمة
+    // تشغيل مشغّل طابور التنبيهات في الخلفية عبر Redis & BullMQ
     initReminderWorker();
+
+    // مزامنة التذكيرات والمهام القادمة من قاعدة البيانات
     await syncUpcomingReminders();
   } catch (error) {
     console.error('❌ حدث خطأ أثناء بدء التشغيل:', error);
