@@ -10,52 +10,67 @@ const ai = new OpenAI({
   baseURL: 'https://api.together.xyz/v1',
 });
 
-// إعداد اتصال آمن مع خوادم أوت لوك مايكروسوفت 365
-function getOutlookClient() {
-  const emailUser = process.env.OUTLOOK_EMAIL;
-  const emailPass = process.env.OUTLOOK_PASSWORD;
+interface OutlookAccount {
+  user: string;
+  pass: string;
+}
 
-  if (!emailUser || !emailPass) return null;
+// استخراج قائمة الحسابات من المتغيرات
+function getOutlookAccounts(): OutlookAccount[] {
+  const rawEmails = process.env.OUTLOOK_EMAIL || '';
+  const rawPasswords = process.env.OUTLOOK_PASSWORD || '';
 
-  return new ImapFlow({
-    host: 'outlook.office365.com',
-    port: 993,
-    secure: true,
-    auth: {
-      user: emailUser,
-      pass: emailPass,
-    },
-    logger: false,
-  });
+  const emails = rawEmails.split(',').map((e) => e.trim()).filter(Boolean);
+  const passwords = rawPasswords.split(',').map((p) => p.trim()).filter(Boolean);
+
+  const accounts: OutlookAccount[] = [];
+  for (let i = 0; i < emails.length; i++) {
+    if (emails[i] && passwords[i]) {
+      accounts.push({ user: emails[i], pass: passwords[i] });
+    }
+  }
+
+  return accounts;
 }
 
 export async function checkAndSummarizeOutlookEmails(): Promise<string[]> {
-  const client = getOutlookClient();
-  if (!client) return [];
+  const accounts = getOutlookAccounts();
+  if (accounts.length === 0) return [];
 
   const summaries: string[] = [];
 
-  try {
-    await client.connect();
-    const lock = await client.getMailboxLock('INBOX');
+  for (const account of accounts) {
+    const client = new ImapFlow({
+      host: 'outlook.office365.com',
+      port: 993,
+      secure: true,
+      auth: {
+        user: account.user,
+        pass: account.pass,
+      },
+      logger: false,
+    });
 
     try {
-      // البحث عن الرسائل غير المقروءة في صندوق الوارد
-      const messages = await client.search({ unseen: true });
-      const recentUids = messages.slice(-5); // أحدث 5 رسائل غير مقروءة
+      await client.connect();
+      const lock = await client.getMailboxLock('INBOX');
 
-      for (const uid of recentUids) {
-        const message = await client.fetchOne(uid, { source: true, flags: true });
-        if (!message || !message.source) continue;
+      try {
+        const messages = await client.search({ unseen: true });
+        const recentUids = messages.slice(-5); // أحدث 5 رسائل غير مقروءة للحساب
 
-        const parsed = await simpleParser(message.source);
-        const subject = parsed.subject || 'بدون موضوع';
-        const from = parsed.from?.text || 'جهة غير معروفة';
-        const bodyText = (parsed.text || '').slice(0, 1500); // أخذ أول 1500 حرف لتلخيصها بدقة
+        for (const uid of recentUids) {
+          const message = await client.fetchOne(uid, { source: true, flags: true });
+          if (!message || !message.source) continue;
 
-        // استخدام الذكاء الاصطناعي لتحليل محتوى إيميل العمل
-        const prompt = `
+          const parsed = await simpleParser(message.source);
+          const subject = parsed.subject || 'بدون موضوع';
+          const from = parsed.from?.text || 'جهة غير معروفة';
+          const bodyText = (parsed.text || '').slice(0, 1500);
+
+          const prompt = `
 أنت سكرتير تنفيذي ذكي. لديك إيميل عمل وارد عبر Outlook:
+الحساب المستقبل: ${account.user}
 المرسل: ${from}
 الموضوع: ${subject}
 نص الرسالة:
@@ -73,50 +88,50 @@ ${bodyText}
 }
 `;
 
-        try {
-          const aiRes = await ai.chat.completions.create({
-            model: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
-            messages: [{ role: 'user', content: prompt }],
-          });
-
-          const raw = aiRes.choices[0].message.content || '{}';
-          const clean = raw.replace(/```json/g, '').replace(/```/g, '').trim();
-          const data = JSON.parse(clean);
-
-          let report = `💼 *إيميل عمل جديد (Outlook):*\n📌 *المرسل:* ${from}\n📋 *الموضوع:* ${subject}\n\n📝 *الملخص:*\n${data.summary}`;
-
-          if (data.hasTask && data.taskTitle) {
-            const newTask = await prisma.task.create({
-              data: {
-                title: data.taskTitle.slice(0, 70),
-                description: `مهمة مستخرجة من إيميل العمل: ${subject}`,
-                priority: 'HIGH',
-                dueDate: data.dueDate ? new Date(data.dueDate) : null,
-                reminderType: 'BEFORE',
-                reminderOffset: 30,
-              },
+          try {
+            const aiRes = await ai.chat.completions.create({
+              model: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
+              messages: [{ role: 'user', content: prompt }],
             });
 
-            await scheduleTaskReminder(newTask);
-            await syncTaskToGoogleCalendar(newTask);
-            report += `\n\n✅ *تم إدراج مهمة تلقائياً في جدولك:* ${data.taskTitle}`;
+            const raw = aiRes.choices[0].message.content || '{}';
+            const clean = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+            const data = JSON.parse(clean);
+
+            let report = `💼 *إيميل عمل جديد (Outlook)*\n📬 *صندوق البريد:* ${account.user}\n📌 *المرسل:* ${from}\n📋 *الموضوع:* ${subject}\n\n📝 *الملخص:*\n${data.summary}`;
+
+            if (data.hasTask && data.taskTitle) {
+              const newTask = await prisma.task.create({
+                data: {
+                  title: data.taskTitle.slice(0, 70),
+                  description: `مهمة مستخرجة من إيميل (${account.user}): ${subject}`,
+                  priority: 'HIGH',
+                  dueDate: data.dueDate ? new Date(data.dueDate) : null,
+                  reminderType: 'BEFORE',
+                  reminderOffset: 30,
+                },
+              });
+
+              await scheduleTaskReminder(newTask);
+              await syncTaskToGoogleCalendar(newTask);
+              report += `\n\n✅ *تم إدراج مهمة تلقائياً في جدولك:* ${data.taskTitle}`;
+            }
+
+            summaries.push(report);
+
+            await client.messageFlagsAdd({ uid }, ['\\Seen']);
+          } catch (err) {
+            console.warn(`فشل تحليل الإيميل ${uid} للحساب ${account.user}:`, err);
           }
-
-          summaries.push(report);
-
-          // تمييز الإيميل كمقروء في أوت لوك لمنع تكرار الإشعار
-          await client.messageFlagsAdd({ uid }, ['\\Seen']);
-        } catch (err) {
-          console.warn(`فشل تحليل الإيميل ${uid}:`, err);
         }
+      } finally {
+        lock.release();
       }
-    } finally {
-      lock.release();
-    }
 
-    await client.logout();
-  } catch (err) {
-    console.error('خطأ أثناء فحص بريد Outlook:', err);
+      await client.logout();
+    } catch (err) {
+      console.error(`خطأ أثناء فحص بريد Outlook للحساب (${account.user}):`, err);
+    }
   }
 
   return summaries;
