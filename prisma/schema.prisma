@@ -100,3 +100,26 @@ model Reward {
   claimedAt   DateTime?
   createdAt   DateTime @default(now())
 }
+model Agent {
+  id          String     @id @default(uuid())
+  name        String     // مثل: المدير المالي، وكيل أبحاث الويب، مستشار العملات الرقمية
+  role        String     // FINANCIAL, RESEARCHER, PLANNER, CRYPTO
+  description String?    // نبذة عن مهام الوكيل
+  systemPrompt String   @db.Text // التوجيهات الدقيقة للوكيل
+  apiKey      String?    // مفتاح API المخصص للوكيل (اختياري)
+  provider    String     @default("TOGETHER") // TOGETHER, GROQ, OPENAI
+  isActive    Boolean    @default(true)
+  canSearchWeb Boolean   @default(false) // صلاحية البحث في الويب
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  logs        AgentLog[]
+}
+
+model AgentLog {
+  id        String   @id @default(uuid())
+  agentId   String
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  query     String   @db.Text // السؤال أو المهمة المطلوبة من الوكيل
+  response  String   @db.Text // التقرير أو الإجابة التي قدمها الوكيل
+  createdAt DateTime @default(now())
+}
