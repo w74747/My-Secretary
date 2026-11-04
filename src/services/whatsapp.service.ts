@@ -30,6 +30,7 @@ class WhatsAppService {
     return {
       status: this.isConnected ? 'CONNECTED' : (this.qrCodeDataUrl ? 'CONNECTING' : 'DISCONNECTED'),
       qrCode: this.qrCodeDataUrl,
+      isConnected: this.isConnected,
     };
   }
 
@@ -84,7 +85,7 @@ class WhatsAppService {
 
     this.sock = makeWASocket({
       auth: state,
-      printQRInTerminal: false,
+      printQRInTerminal: true,
       defaultQueryTimeoutMs: 60000,
       browser: ['Executive Secretary', 'Chrome', '1.0.0'],
     });
@@ -96,6 +97,7 @@ class WhatsAppService {
 
       if (qr) {
         try {
+          // ضمان توليد صورة Data URL صحيحة لـ QR لتظهر في واجهة المستخدم فوراً
           this.qrCodeDataUrl = await qrcode.toDataURL(qr);
         } catch {
           this.qrCodeDataUrl = qr;
@@ -105,7 +107,6 @@ class WhatsAppService {
       }
 
       if (connection === 'close') {
-        this.qrCodeDataUrl = null;
         this.isConnected = false;
         const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
         const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
@@ -115,6 +116,8 @@ class WhatsAppService {
           setTimeout(() => {
             this.init();
           }, 3000);
+        } else {
+          this.qrCodeDataUrl = null;
         }
       } else if (connection === 'open') {
         this.qrCodeDataUrl = null;
@@ -131,7 +134,6 @@ class WhatsAppService {
 
         const senderJid = msg.key.remoteJid;
 
-        // تجاهل القنوات والحالات والمجموعات
         if (
           !senderJid ||
           senderJid.endsWith('@newsletter') ||
@@ -157,7 +159,6 @@ class WhatsAppService {
         const senderLast8 = senderDigits.slice(-8);
         const isOwner = ownerPhone ? senderDigits.includes(ownerPhone.slice(-8)) : false;
 
-        // التحقق من وجود مهمة نشطة لهذا الرقم إن كان شخصاً مكلّفاً
         const assignedTask = await prisma.task.findFirst({
           where: {
             status: { not: 'DONE' },
@@ -169,7 +170,6 @@ class WhatsAppService {
           orderBy: { dueDate: 'asc' },
         });
 
-        // 1. إذا كان المرسل مكلّفاً بمهمة نشطة وليس هو المالك
         if (assignedTask && !isOwner) {
           const isExplicitDone = /^(تم|تمت|خلصت|أنجزت|انجزت|سويتها|سويت المطلوب|جاهز)\b/i.test(cleanText);
 
@@ -191,27 +191,20 @@ class WhatsAppService {
                 `✅ تم إنجاز المهمة من قبل *${assignedTask.assignee?.name}*:\n📌 ${assignedTask.title}`
               );
             }
-          } else {
-            console.log(`ℹ️ تم تجاهل رسالة عادية من المكلّف [${assignedTask.assignee?.name}]: "${cleanText}"`);
           }
           continue;
         }
 
-        // 2. قفل أمني حصري: إذا كان رقم المالك مسجلاً وكان المرسل ليس المالك -> تجاهل تام وفوري
         if (ownerPhone && !isOwner) {
-          console.log(`🔒 تم تجاهل رسالة من رقم غير مصرح له: [${senderDigits}]`);
           continue;
         }
 
-        // 3. التحقق من وجود نية صريحة لإنشاء/إدارة مهمة للمالك
         const hasTaskIntent = /^(مهمه|مهمة|ذكر|ذَكِّر|ذكرني|سجل|أضف|اضف|كلف|كلّف|بلغ|بلّغ|أخبر|اخبر|خبر|قل لـ?|قول لـ?|خلي|خلّي|وصي|وصّي|ارسل لـ?|أرسل لـ?|ايش عندي|شو عندي|جدولي|جدول المهام|المهام|تحديث المهمة)/i.test(cleanText);
 
         if (!hasTaskIntent) {
-          console.log(`ℹ️ رسالة عادية من المالك لا تحتوي على أمر مهمة: "${cleanText}"`);
           continue;
         }
 
-        console.log(`🎯 معالجة أمر من المالك: "${cleanText}"`);
         try {
           const replyText = await processUserMessage(senderJid, cleanText);
           if (replyText && this.sock) {
