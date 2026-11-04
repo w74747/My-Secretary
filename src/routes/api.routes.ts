@@ -10,10 +10,6 @@ import {
 
 const router = Router();
 
-// ==========================================
-// 1. مسارات المهام (Tasks)
-// ==========================================
-
 router.get('/tasks', async (req: Request, res: Response) => {
   try {
     const tasks = await prisma.task.findMany({
@@ -66,32 +62,8 @@ router.delete('/tasks/:id', async (req: Request, res: Response) => {
   }
 });
 
-// ==========================================
-// 2. مسارات العادات والمكافآت (Habits & Gamification)
-// ==========================================
-
 router.get('/habits', async (req: Request, res: Response) => {
   try {
-    const count = await prisma.habit.count();
-    if (count === 0) {
-      await prisma.habit.createMany({
-        data: [
-          { title: 'المحافظة على الصلوات الخمس في وقتها', category: 'SPIRITUAL', points: 25, targetCount: 5, unit: 'صلوات' },
-          { title: 'قراءة الورد القرآني اليومي', category: 'SPIRITUAL', points: 15, targetCount: 1, unit: 'حزب/جزء' },
-          { title: 'أذكار الصباح والمساء', category: 'SPIRITUAL', points: 10, targetCount: 2, unit: 'مرة' },
-          { title: 'التمارين الرياضية أو المشي', category: 'FITNESS', points: 20, targetCount: 30, unit: 'دقيقة' },
-        ],
-      });
-
-      await prisma.reward.createMany({
-        data: [
-          { title: 'قطعة شوكولاتة مفضلة 🍫', costPoints: 50, icon: '🍫' },
-          { title: 'آيسكريم منعش 🍦', costPoints: 80, icon: '🍦' },
-          { title: 'مشروب قهوة خاص ☕', costPoints: 40, icon: '☕' },
-        ],
-      });
-    }
-
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -104,14 +76,13 @@ router.get('/habits', async (req: Request, res: Response) => {
 
     const totalLogs = await prisma.habitLog.findMany({
       where: { completed: true },
-      include: { habit: true },
     });
-    const earned = totalLogs.reduce((acc, log) => acc + (log.habit?.points || 0), 0);
+    const earned = totalLogs.reduce((acc, log) => acc + log.pointsAwarded, 0);
 
-    const claimedRewards = await prisma.reward.findMany({
-      where: { isClaimed: true },
+    const claimedRewards = await prisma.rewardClaim.findMany({
+      include: { reward: true },
     });
-    const spent = claimedRewards.reduce((acc, r) => acc + r.costPoints, 0);
+    const spent = claimedRewards.reduce((acc, c) => acc + c.reward.costPoints, 0);
 
     res.json({
       habits,
@@ -122,9 +93,36 @@ router.get('/habits', async (req: Request, res: Response) => {
   }
 });
 
+router.post('/habits', async (req: Request, res: Response) => {
+  try {
+    const { title, category, points, targetCount, unit, frequency, customDays, targetTime } = req.body;
+    if (!title) return res.status(400).json({ error: 'عنوان العادة مطلوب' });
+
+    const newHabit = await prisma.habit.create({
+      data: {
+        title,
+        category: category || 'SPIRITUAL',
+        points: points ? Number(points) : 10,
+        targetCount: targetCount ? Number(targetCount) : 1,
+        unit: unit || 'مرة',
+        frequency: frequency || 'DAILY',
+        customDays: customDays ? Number(customDays) : 1,
+        targetTime: targetTime || null,
+      },
+    });
+
+    res.status(201).json(newHabit);
+  } catch (error) {
+    res.status(500).json({ error: 'فشل إنشاء العادة' });
+  }
+});
+
 router.post('/habits/:id/toggle', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const habit = await prisma.habit.findUnique({ where: { id } });
+    if (!habit) return res.status(404).json({ error: 'العادة غير موجودة' });
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -137,7 +135,12 @@ router.post('/habits/:id/toggle', async (req: Request, res: Response) => {
       res.json({ status: 'uncompleted' });
     } else {
       await prisma.habitLog.create({
-        data: { habitId: id, date: today, completed: true },
+        data: {
+          habitId: id,
+          date: today,
+          completed: true,
+          pointsAwarded: habit.points,
+        },
       });
       res.json({ status: 'completed' });
     }
@@ -146,10 +149,21 @@ router.post('/habits/:id/toggle', async (req: Request, res: Response) => {
   }
 });
 
+router.delete('/habits/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await prisma.habit.delete({ where: { id } });
+    res.json({ success: true, message: 'تم حذف العادة بنجاح' });
+  } catch (error) {
+    res.status(500).json({ error: 'فشل حذف العادة' });
+  }
+});
+
 router.get('/rewards', async (req: Request, res: Response) => {
   try {
     const rewards = await prisma.reward.findMany({
       orderBy: { costPoints: 'asc' },
+      include: { claims: true },
     });
     res.json(rewards);
   } catch (error) {
@@ -163,9 +177,8 @@ router.post('/rewards/:id/claim', async (req: Request, res: Response) => {
     const reward = await prisma.reward.findUnique({ where: { id } });
     if (!reward) return res.status(404).json({ error: 'المكافأة غير موجودة' });
 
-    await prisma.reward.update({
-      where: { id },
-      data: { isClaimed: true, claimedAt: new Date() },
+    await prisma.rewardClaim.create({
+      data: { rewardId: id },
     });
 
     res.json({ success: true, message: `صحتين وهنا! استمتع بـ ${reward.title}` });
@@ -174,48 +187,18 @@ router.post('/rewards/:id/claim', async (req: Request, res: Response) => {
   }
 });
 
-// ==========================================
-// 3. مسارات فريق الوكلاء الذكي (Multi-Agent Team)
-// ==========================================
-
 router.get('/agents', async (req: Request, res: Response) => {
   try {
-    const count = await prisma.agent.count();
-    if (count === 0) {
-      await prisma.agent.createMany({
-        data: [
-          {
-            name: 'المدير المالي التنفيذي',
-            role: 'FINANCIAL',
-            description: 'إدارة المصاريف والالتزامات الشهرية والسنوية والتخطيط المالي المبكر.',
-            systemPrompt: 'أنت مستشار مالي شخصي تحرص على تنظيم الميزانيات وتخفيض النفقات غير الضرورية.',
-            provider: 'TOGETHER',
-            canSearchWeb: false,
-          },
-          {
-            name: 'وكيل أبحاث السوق والعملات الرقمية',
-            role: 'CRYPTO',
-            description: 'رصد توقعات الخبراء للعملات الرقمية وأخبار الأسواق الصاعدة.',
-            systemPrompt: 'أنت خبير أبحاث في البلوكشين والعملات الرقمية ترصد ترشيحات كبار المحللين.',
-            provider: 'TOGETHER',
-            canSearchWeb: true,
-          },
-          {
-            name: 'وكيل الاستكشاف والبحث الشامل',
-            role: 'RESEARCHER',
-            description: 'إجراء بحوث معمقة وتلخيص التقارير والمواضيع المخصصة بطلبك.',
-            systemPrompt: 'أنت باحث متخصص في إعداد ملخصات شاملة ومباشرة مدعمة بالحقائق.',
-            provider: 'TOGETHER',
-            canSearchWeb: true,
-          },
-        ],
-      });
-    }
+    const agents = await prisma.agent.findMany({ orderBy: { createdAt: 'asc' } });
+    
+    // إخفاء مفاتيح الـ API الحساسة من الاستجابة للواجهة لحماية الأمان
+    const safeAgents = agents.map(agent => ({
+      ...agent,
+      apiKey: agent.apiKey ? '••••••••' : null,
+      hasApiKey: !!agent.apiKey
+    }));
 
-    const agents = await prisma.agent.findMany({
-      orderBy: { createdAt: 'asc' },
-    });
-    res.json(agents);
+    res.json(safeAgents);
   } catch (error) {
     res.status(500).json({ error: 'فشل جلب الوكلاء' });
   }
@@ -243,10 +226,6 @@ router.put('/agents/:id', async (req: Request, res: Response) => {
   }
 });
 
-// ==========================================
-// 4. مسار خريطة الأفكار والعلاقات (Mind Map Graph)
-// ==========================================
-
 router.get('/mindmap', async (req: Request, res: Response) => {
   try {
     const tasks = await prisma.task.findMany({ include: { assignee: true } });
@@ -270,7 +249,7 @@ router.get('/mindmap', async (req: Request, res: Response) => {
       const isDone = t.status === 'DONE';
       nodes.push({
         id: `task-${t.id}`,
-        label: `${t.title}\n(${t.progress}%)`,
+        label: `${t.title}`,
         shape: 'ellipse',
         color: isDone ? '#DCFCE7' : '#FEE2E2',
         font: { color: '#1E293B', size: 11 },
@@ -306,10 +285,6 @@ router.get('/mindmap', async (req: Request, res: Response) => {
   }
 });
 
-// ==========================================
-// 5. مسارات ربط Google Calendar الرسمي (OAuth 2.0)
-// ==========================================
-
 router.get('/auth/google', (req: Request, res: Response) => {
   const url = getGoogleAuthUrl();
   res.redirect(url);
@@ -324,34 +299,20 @@ router.get('/auth/google/callback', async (req: Request, res: Response) => {
     res.send(`
       <!DOCTYPE html>
       <html dir="rtl" lang="ar">
-        <head>
-          <meta charset="UTF-8">
-          <title>نجاح ربط التقويم</title>
-          <style>
-            body { font-family: sans-serif; text-align: center; padding: 50px; background: #F8FAFC; }
-            .card { background: white; border-radius: 24px; padding: 30px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); max-width: 400px; margin: auto; }
-          </style>
-        </head>
-        <body>
-          <div class="card">
-            <h2 style="color:#15803D;">✅ تم ربط حساب Google Calendar بنجاح!</h2>
-            <p style="color:#64748B; font-size:14px;">تتم الآن مزامنة كافة المهام وتعديلاتها تلقائياً مع تقويمك الشخصي.</p>
-            <script>
-              setTimeout(() => {
-                if (window.opener) {
-                  window.opener.location.reload();
-                  window.close();
-                } else {
-                  window.location.href = '/';
-                }
-              }, 2500);
-            </script>
-          </div>
+        <head><meta charset="UTF-8"><title>نجاح ربط التقويم</title></head>
+        <body style="font-family:sans-serif; text-align:center; padding:50px; background:#F8FAFC;">
+          <h2>✅ تم ربط حساب Google Calendar بنجاح!</h2>
+          <script>
+            setTimeout(() => {
+              if (window.opener) { window.opener.location.reload(); window.close(); }
+              else { window.location.href = '/'; }
+            }, 2500);
+          </script>
         </body>
       </html>
     `);
   } catch (err) {
-    res.status(500).send('فشل ربط حساب جوجل، يرجى التأكد من إدخال المتغيرات بشكل سليم.');
+    res.status(500).send('فشل ربط حساب جوجل.');
   }
 });
 
