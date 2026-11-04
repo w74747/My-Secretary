@@ -174,16 +174,38 @@ router.get('/rewards', async (req: Request, res: Response) => {
 router.post('/rewards/:id/claim', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const reward = await prisma.reward.findUnique({ where: { id } });
-    if (!reward) return res.status(404).json({ error: 'المكافأة غير موجودة' });
 
-    await prisma.rewardClaim.create({
-      data: { rewardId: id },
+    const result = await prisma.$transaction(async (tx) => {
+      const reward = await tx.reward.findUnique({ where: { id } });
+      if (!reward) throw new Error('المكافأة غير موجودة');
+
+      const totalLogs = await tx.habitLog.findMany({ where: { completed: true } });
+      const earned = totalLogs.reduce((acc, log) => acc + log.pointsAwarded, 0);
+
+      const claimedRewards = await tx.rewardClaim.findMany({
+        include: { reward: true },
+      });
+      const spent = claimedRewards.reduce((acc, c) => acc + c.reward.costPoints, 0);
+      const balance = Math.max(0, earned - spent);
+
+      if (balance < reward.costPoints) {
+        throw new Error('رصيد النقاط غير كافٍ لاستبدال هذه المكافأة!');
+      }
+
+      const claim = await tx.rewardClaim.create({
+        data: { rewardId: id },
+      });
+
+      return { claim, reward, remainingBalance: balance - reward.costPoints };
     });
 
-    res.json({ success: true, message: `صحتين وهنا! استمتع بـ ${reward.title}` });
-  } catch (error) {
-    res.status(500).json({ error: 'فشل استبدال المكافأة' });
+    res.json({ 
+      success: true, 
+      message: `صحتين وهنا! استمتع بـ ${result.reward.title}`,
+      newBalance: result.remainingBalance 
+    });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || 'فشل استبدال المكافأة' });
   }
 });
 
@@ -191,7 +213,6 @@ router.get('/agents', async (req: Request, res: Response) => {
   try {
     const agents = await prisma.agent.findMany({ orderBy: { createdAt: 'asc' } });
     
-    // إخفاء مفاتيح الـ API الحساسة من الاستجابة للواجهة لحماية الأمان
     const safeAgents = agents.map(agent => ({
       ...agent,
       apiKey: agent.apiKey ? '••••••••' : null,
