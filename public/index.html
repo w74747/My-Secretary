@@ -15,7 +15,6 @@
   <link rel="preconnect" href="https://fonts.gstatic.com">
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   
-  <!-- مكتبة رسم خريطة الأفكار التفاعلية -->
   <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
 
   <style>
@@ -27,7 +26,7 @@
 </head>
 <body class="bg-[#F5F6FA] text-[#1E293B] antialiased h-screen overflow-hidden flex flex-col md:flex-row">
 
-  <!-- 1. الشريط الجانبي (Desktop Sidebar) -->
+  <!-- 1. الشريط الجانبي (Sidebar) -->
   <aside class="hidden md:flex w-16 bg-[#4338CA] flex-col items-center py-6 gap-6 text-white/70 select-none z-20 shadow-lg">
     <div class="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center text-white font-extrabold text-lg shadow-inner">
       س
@@ -56,28 +55,24 @@
     </div>
   </aside>
 
-  <!-- 2. مساحة المحتوى الرئيسية -->
+  <!-- 2. محتوى الصفحة الرئيسي -->
   <div class="flex-1 flex flex-col h-full overflow-hidden">
     
-    <!-- رأس الصفحة -->
-    <header class="bg-white/90 backdrop-blur-md border-b border-slate-100 px-4 md:px-8 py-4 flex justify-between items-center z-10">
+    <header class="bg-white/95 backdrop-blur-md border-b border-slate-100 px-4 md:px-8 py-4 flex justify-between items-center z-10">
       <div>
         <h1 class="text-base md:text-xl font-bold text-[#1E293B]">السكرتير التنفيذي الذكي</h1>
         <p class="text-[11px] md:text-xs text-[#64748B] mt-0.5" id="completion-summary">جاري تحميل البيانات...</p>
       </div>
 
       <div class="flex items-center gap-2 md:gap-3">
-        <!-- زر إضافة مهمة جديدة -->
         <button onclick="openNewTaskModal()" class="bg-[#1E293B] hover:bg-slate-800 text-white px-3.5 py-1.5 rounded-2xl text-xs font-semibold shadow-sm transition flex items-center gap-1">
           <span>+ إضافة مهمة جديدة</span>
         </button>
 
-        <!-- زر تفويض Google Calendar -->
         <button onclick="openGoogleCalendarAuth()" class="hidden sm:flex px-3.5 py-1.5 rounded-2xl text-[11px] font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition items-center gap-1.5 border border-indigo-100">
           <span>📅 ربط تقويم Google</span>
         </button>
 
-        <!-- شارة اتصال واتساب (قابلة للنقر لعرض QR) -->
         <button onclick="openWhatsAppModal()" id="wa-status-badge" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 cursor-pointer hover:bg-amber-100 transition">
           <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
           <span>جاري الفحص...</span>
@@ -85,10 +80,9 @@
       </div>
     </header>
 
-    <!-- منطقة عرض التبويبات -->
     <main class="flex-1 overflow-x-auto overflow-y-auto p-4 md:p-8 pb-20 md:pb-8">
       
-      <!-- تبويب 1: لوحة المهام (Kanban) -->
+      <!-- تبويب 1: لوحة المهام -->
       <div id="view-kanban" class="flex flex-col md:flex-row gap-6 h-full items-start">
         <div class="w-full md:w-80 min-w-[19rem] flex flex-col max-h-full">
           <div class="flex items-center justify-between mb-3 px-2">
@@ -153,7 +147,9 @@
               <h3 class="font-bold text-sm text-[#1E293B]">الورد اليومي والعادات</h3>
               <p class="text-[11px] text-[#64748B]">اضغط على الدائرة لتسجيل الإنجاز وكسب النقاط</p>
             </div>
-            <span class="text-xs px-2.5 py-1 bg-slate-100 text-slate-600 rounded-full font-medium">اليوم</span>
+            <button onclick="openNewHabitModal()" class="px-3.5 py-1.5 bg-[#4338CA] text-white text-xs font-semibold rounded-2xl hover:opacity-90 transition">
+              + إضافة عادة جديدة
+            </button>
           </div>
           <div id="habits-list" class="flex flex-col gap-3"></div>
         </div>
@@ -209,7 +205,7 @@
     </nav>
   </div>
 
-  <!-- نافذة ربط الواتساب وعرض QR -->
+  <!-- نافذة ربط الواتساب وعرض QR الفوري -->
   <div id="wa-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
     <div class="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 max-w-sm w-full flex flex-col items-center text-center gap-4">
       <div class="w-full flex justify-between items-center">
@@ -218,13 +214,127 @@
       </div>
       <p class="text-xs text-slate-500">افتح تطبيق واتساب على هاتفك > الأجهزة المرتبطة > ربط جهاز، وامسح الرمز التالي:</p>
       <div id="wa-qr-container" class="w-56 h-56 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-center p-2">
-        <span class="text-xs text-slate-400">جاري استخراج الرمز...</span>
+        <span class="text-xs text-slate-400">جاري تحميل رمز الـ QR...</span>
       </div>
       <button onclick="logoutWhatsApp()" class="text-xs text-red-500 hover:underline">إعادة تعيين الجلسة وتوليد رمز جديد</button>
     </div>
   </div>
 
-  <!-- نافذة تعديل إعدادات وبرومبت الوكيل -->
+  <!-- نافذة إضافة مهمة جديدة مع خيارات التذكير المتقدمة -->
+  <div id="new-task-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 max-w-md w-full flex flex-col gap-4">
+      <div class="flex justify-between items-center">
+        <h3 class="font-bold text-base text-[#1E293B]">إضافة مهمة جديدة وتنبيه</h3>
+        <button onclick="closeNewTaskModal()" class="text-slate-400 hover:text-slate-600 text-sm">✕</button>
+      </div>
+      <div class="flex flex-col gap-3">
+        <input type="text" id="task-title" placeholder="عنوان المهمة..." class="w-full text-xs p-3 rounded-2xl border border-slate-200 outline-none focus:border-indigo-500" />
+        <textarea id="task-desc" placeholder="تفاصيل إضافية (اختياري)..." rows="2" class="w-full text-xs p-3 rounded-2xl border border-slate-200 outline-none focus:border-indigo-500"></textarea>
+        
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-[11px] text-slate-500 block mb-1">الموعد والتاريخ</label>
+            <input type="datetime-local" id="task-date" class="w-full text-xs p-2 rounded-xl border border-slate-200 outline-none" />
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-500 block mb-1">الأولوية</label>
+            <select id="task-priority" class="w-full text-xs p-2 rounded-xl border border-slate-200 outline-none">
+              <option value="MEDIUM">عادية</option>
+              <option value="HIGH">مرتفعة</option>
+              <option value="URGENT">عاجلة جداً</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- إعدادات التذكير المتقدمة -->
+        <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+          <div>
+            <label class="text-[11px] text-slate-500 block mb-1">نوع التذكير</label>
+            <select id="task-reminder-type" class="w-full text-xs p-2 rounded-xl border border-slate-200 outline-none">
+              <option value="NONE">بدون تذكير</option>
+              <option value="EXACT">على الموعد تماماً</option>
+              <option value="BEFORE">قبل الموعد بـ...</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-500 block mb-1">فترة التنبيه المسبق</label>
+            <select id="task-reminder-offset" class="w-full text-xs p-2 rounded-xl border border-slate-200 outline-none">
+              <option value="15">قبل 15 دقيقة</option>
+              <option value="30" selected>قبل 30 دقيقة</option>
+              <option value="60">قبل ساعة واحدة</option>
+              <option value="1440">قبل يوم كامل</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <button onclick="submitNewTask()" class="w-full py-2.5 bg-[#4338CA] text-white text-xs font-semibold rounded-2xl hover:opacity-90 transition mt-2">
+        حفظ المهمة وجدولة التنبيه
+      </button>
+    </div>
+  </div>
+
+  <!-- نافذة إضافة عادة جديدة بمعدل تكرار مخصص -->
+  <div id="new-habit-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 max-w-md w-full flex flex-col gap-4">
+      <div class="flex justify-between items-center">
+        <h3 class="font-bold text-base text-[#1E293B]">إضافة عادة أو ورد جديد</h3>
+        <button onclick="closeNewHabitModal()" class="text-slate-400 hover:text-slate-600 text-sm">✕</button>
+      </div>
+      <div class="flex flex-col gap-3">
+        <input type="text" id="habit-title" placeholder="اسم العادة أو الورد (مثال: قراءة كتاب)..." class="w-full text-xs p-3 rounded-2xl border border-slate-200 outline-none focus:border-indigo-500" />
+        
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-[11px] text-slate-500 block mb-1">التصنيف</label>
+            <select id="habit-category" class="w-full text-xs p-2 rounded-xl border border-slate-200 outline-none">
+              <option value="SPIRITUAL">روحي وعبادات</option>
+              <option value="FITNESS">صحة ولياقة</option>
+              <option value="HEALTH">تطوير وعمل</option>
+              <option value="LEARNING">تعلم وقراءة</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-500 block mb-1">النقاط المكتسبة</label>
+            <input type="number" id="habit-points" value="15" class="w-full text-xs p-2 rounded-xl border border-slate-200 outline-none" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-[11px] text-slate-500 block mb-1">معدل التكرار</label>
+            <select id="habit-frequency" class="w-full text-xs p-2 rounded-xl border border-slate-200 outline-none">
+              <option value="DAILY">يومي</option>
+              <option value="WEEKLY">أسبوعي</option>
+              <option value="MONTHLY">شهري</option>
+              <option value="CUSTOM">كل عدة أيام</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-500 block mb-1">وقت التنبيه اليومي</label>
+            <input type="time" id="habit-time" value="06:00" class="w-full text-xs p-2 rounded-xl border border-slate-200 outline-none" />
+          </div>
+        </div>
+      </div>
+
+      <button onclick="submitNewHabit()" class="w-full py-2.5 bg-[#4338CA] text-white text-xs font-semibold rounded-2xl hover:opacity-90 transition mt-2">
+        حفظ العادة الجديدة
+      </button>
+    </div>
+  </div>
+
+  <!-- نافذة استبدال المكافآت -->
+  <div id="rewards-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 max-w-md w-full flex flex-col gap-4">
+      <div class="flex justify-between items-center">
+        <h3 class="font-bold text-base text-[#1E293B]">سوق المكافآت المستحقة</h3>
+        <button onclick="closeRewardsModal()" class="text-slate-400 hover:text-slate-600 text-sm">✕</button>
+      </div>
+      <div id="rewards-list" class="flex flex-col gap-3 max-h-72 overflow-y-auto pr-1"></div>
+    </div>
+  </div>
+
+  <!-- نافذة إعدادات الوكيل والبرومبت -->
   <div id="agent-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
     <div class="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 max-w-lg w-full flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
       <div class="flex justify-between items-center">
@@ -233,10 +343,8 @@
       </div>
       <input type="hidden" id="modal-agent-id" />
       
-      <!-- حقل البرومبت المخصص للوكيل -->
       <div class="flex flex-col gap-1.5">
         <label class="text-xs font-bold text-slate-700">توجيهات وبرومبت الوكيل (System Prompt):</label>
-        <p class="text-[10px] text-slate-400">اكتب هنا المهام والشخصية وطريقة الرد التي تريد من هذا الوكيل الالتزام بها بدقة.</p>
         <textarea id="modal-agent-prompt" rows="5" class="w-full text-xs p-3 rounded-2xl border border-slate-200 outline-none focus:border-indigo-500 font-mono leading-relaxed"></textarea>
       </div>
 
@@ -256,48 +364,6 @@
     </div>
   </div>
 
-  <!-- نافذة إضافة مهمة جديدة -->
-  <div id="new-task-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-    <div class="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 max-w-md w-full flex flex-col gap-4">
-      <div class="flex justify-between items-center">
-        <h3 class="font-bold text-base text-[#1E293B]">إضافة مهمة جديدة</h3>
-        <button onclick="closeNewTaskModal()" class="text-slate-400 hover:text-slate-600 text-sm">✕</button>
-      </div>
-      <div class="flex flex-col gap-3">
-        <input type="text" id="task-title" placeholder="عنوان المهمة..." class="w-full text-xs p-3 rounded-2xl border border-slate-200 outline-none focus:border-indigo-500" />
-        <textarea id="task-desc" placeholder="تفاصيل إضافية (اختياري)..." rows="2" class="w-full text-xs p-3 rounded-2xl border border-slate-200 outline-none focus:border-indigo-500"></textarea>
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="text-[11px] text-slate-500 block mb-1">الموعد والتاريخ</label>
-            <input type="datetime-local" id="task-date" class="w-full text-xs p-2 rounded-xl border border-slate-200 outline-none" />
-          </div>
-          <div>
-            <label class="text-[11px] text-slate-500 block mb-1">الأولوية</label>
-            <select id="task-priority" class="w-full text-xs p-2 rounded-xl border border-slate-200 outline-none">
-              <option value="MEDIUM">عادية</option>
-              <option value="HIGH">مرتفعة</option>
-              <option value="URGENT">عاجلة جداً</option>
-            </select>
-          </div>
-        </div>
-      </div>
-      <button onclick="submitNewTask()" class="w-full py-2.5 bg-[#4338CA] text-white text-xs font-semibold rounded-2xl hover:opacity-90 transition mt-2">
-        حفظ المهمة
-      </button>
-    </div>
-  </div>
-
-  <!-- نافذة استبدال المكافآت -->
-  <div id="rewards-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-    <div class="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 max-w-md w-full flex flex-col gap-4">
-      <div class="flex justify-between items-center">
-        <h3 class="font-bold text-base text-[#1E293B]">سوق المكافآت المستحقة</h3>
-        <button onclick="closeRewardsModal()" class="text-slate-400 hover:text-slate-600 text-sm">✕</button>
-      </div>
-      <div id="rewards-list" class="flex flex-col gap-3 max-h-72 overflow-y-auto pr-1"></div>
-    </div>
-  </div>
-
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(err => console.error('SW Error:', err));
@@ -306,7 +372,6 @@
     let currentTasks = [];
     let userPoints = 0;
     let mindmapNetwork = null;
-    let latestQrCode = null;
 
     function switchTab(tab) {
       ['kanban', 'habits', 'mindmap', 'agents'].forEach(t => {
@@ -334,11 +399,10 @@
     async function checkWhatsAppStatus() {
       try {
         const res = await fetch('/api/whatsapp/status');
-        if (!res.ok) throw new Error('API Error');
+        if (!res.ok) return;
         const data = await res.json();
-        latestQrCode = data.qrCode;
-
         const badge = document.getElementById('wa-status-badge');
+        
         if (data.isConnected) {
           badge.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-[#DCFCE7] text-[#15803D] border border-emerald-200 cursor-pointer';
           badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500"></span><span>واتساب متصل ✓</span>';
@@ -347,18 +411,29 @@
           badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-500"></span><span>غير متصل (اضغط للمسح)</span>';
         }
       } catch (err) {
-        console.error('فشل فحص حالة الواتساب:', err);
+        console.error(err);
       }
     }
 
-    function openWhatsAppModal() {
-      const container = document.getElementById('wa-qr-container');
-      if (latestQrCode) {
-        container.innerHTML = `<img src="${latestQrCode}" class="w-full h-full object-contain" alt="QR Code" />`;
-      } else {
-        container.innerHTML = '<span class="text-xs text-slate-400">جاري انتظار الرمز أو أن الواتساب متصل بالفعل...</span>';
-      }
+    async function openWhatsAppModal() {
       document.getElementById('wa-modal').classList.remove('hidden');
+      const container = document.getElementById('wa-qr-container');
+      container.innerHTML = '<span class="text-xs text-slate-400">جاري جلب رمز الـ QR...</span>';
+
+      try {
+        const res = await fetch('/api/whatsapp/status');
+        const data = await res.json();
+        if (data.qrCode) {
+          container.innerHTML = `<img src="${data.qrCode}" class="w-full h-full object-contain" alt="QR Code" />`;
+        } else if (data.isConnected) {
+          container.innerHTML = '<span class="text-xs text-emerald-600 font-bold">واتساب متصل بالفعل بنجاح!</span>';
+        } else {
+          container.innerHTML = '<span class="text-xs text-amber-600">جاري توليد الرمز، يرجى الانتظار ثوانٍ...</span>';
+          setTimeout(openWhatsAppModal, 3000);
+        }
+      } catch (e) {
+        container.innerHTML = '<span class="text-xs text-red-500">فشل جلب رمز الـ QR</span>';
+      }
     }
 
     function closeWhatsAppModal() {
@@ -418,10 +493,6 @@
         ? `<span class="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-[#FEE2E2] text-[#B91C1C]">عاجلة</span>`
         : `<span class="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-[#FFEDD5] text-[#C2410C]">عادية</span>`;
 
-      let assigneeBadge = task.assignee
-        ? `<span class="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-[#F3E8FF] text-[#7E22CE]">👤 ${task.assignee.name}</span>`
-        : '';
-
       let dateFormatted = 'بدون موعد';
       if (task.dueDate) {
         dateFormatted = new Intl.DateTimeFormat('ar-EG', {
@@ -436,10 +507,7 @@
 
       card.innerHTML = `
         <div class="flex items-center justify-between">
-          <div class="flex gap-1.5 flex-wrap">
-            ${priorityBadge}
-            ${assigneeBadge}
-          </div>
+          <div class="flex gap-1.5 flex-wrap">${priorityBadge}</div>
           <button onclick="deleteTask('${task.id}')" class="text-slate-300 hover:text-red-500 text-xs">✕</button>
         </div>
         <h3 class="font-bold text-xs md:text-sm text-[#1E293B]">${task.title}</h3>
@@ -451,36 +519,55 @@
       return card;
     }
 
-    function openNewTaskModal() {
-      document.getElementById('new-task-modal').classList.remove('hidden');
-    }
-    function closeNewTaskModal() {
-      document.getElementById('new-task-modal').classList.add('hidden');
-    }
+    function openNewTaskModal() { document.getElementById('new-task-modal').classList.remove('hidden'); }
+    function closeNewTaskModal() { document.getElementById('new-task-modal').classList.add('hidden'); }
+    
     async function submitNewTask() {
       const title = document.getElementById('task-title').value.trim();
       const description = document.getElementById('task-desc').value.trim();
       const dueDate = document.getElementById('task-date').value;
       const priority = document.getElementById('task-priority').value;
+      const reminderType = document.getElementById('task-reminder-type').value;
+      const reminderOffset = document.getElementById('task-reminder-offset').value;
 
-      if (!title) {
-        alert('يرجى إدخال عنوان المهمة');
-        return;
-      }
+      if (!title) { alert('يرجى إدخال عنوان المهمة'); return; }
 
       try {
         await fetch('/api/tasks', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, description, dueDate: dueDate || null, priority })
+          body: JSON.stringify({ title, description, dueDate: dueDate || null, priority, reminderType, reminderOffset })
         });
         closeNewTaskModal();
         document.getElementById('task-title').value = '';
         document.getElementById('task-desc').value = '';
         fetchTasks();
-      } catch (e) {
-        console.error(e);
-      }
+      } catch (e) { console.error(e); }
+    }
+
+    // دوال العادات المخصصة
+    function openNewHabitModal() { document.getElementById('new-habit-modal').classList.remove('hidden'); }
+    function closeNewHabitModal() { document.getElementById('new-habit-modal').classList.add('hidden'); }
+
+    async function submitNewHabit() {
+      const title = document.getElementById('habit-title').value.trim();
+      const category = document.getElementById('habit-category').value;
+      const points = document.getElementById('habit-points').value;
+      const frequency = document.getElementById('habit-frequency').value;
+      const targetTime = document.getElementById('habit-time').value;
+
+      if (!title) { alert('يرجى إدخال عنوان العادة'); return; }
+
+      try {
+        await fetch('/api/habits', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, category, points, frequency, targetTime, targetCount: 1, unit: 'مرة' })
+        });
+        closeNewHabitModal();
+        document.getElementById('habit-title').value = '';
+        fetchHabits();
+      } catch (e) { console.error(e); }
     }
 
     async function fetchHabits() {
@@ -506,174 +593,105 @@
             <div class="flex items-center gap-3">
               <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center transition ${
                 isDoneToday ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-300'
-              }">
-                ${isDoneToday ? '✓' : ''}
-              </div>
+              }">${isDoneToday ? '✓' : ''}</div>
               <div>
                 <h4 class="font-bold text-xs md:text-sm text-[#1E293B] ${isDoneToday ? 'line-through text-slate-400' : ''}">${habit.title}</h4>
-                <span class="text-[10px] text-slate-400">${habit.targetCount} ${habit.unit || ''}</span>
+                <span class="text-[10px] text-slate-400">تكرار: ${habit.frequency === 'DAILY' ? 'يومي' : habit.frequency === 'WEEKLY' ? 'أسبوعي' : 'مخصص'} | ⏰ ${habit.targetTime || '06:00'}</span>
               </div>
             </div>
-            <span class="text-xs font-bold ${isDoneToday ? 'text-emerald-600' : 'text-indigo-600'}">+${habit.points} ن</span>
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-bold ${isDoneToday ? 'text-emerald-600' : 'text-indigo-600'}">+${habit.points} ن</span>
+              <button onclick="event.stopPropagation(); deleteHabit('${habit.id}')" class="text-slate-300 hover:text-red-500 text-xs px-1.5">✕</button>
+            </div>
           `;
           list.appendChild(el);
         });
-      } catch (e) {
-        console.error('فشل جلب العادات:', e);
-      }
+      } catch (e) { console.error(e); }
     }
 
     async function toggleHabit(id) {
-      try {
-        await fetch(`/api/habits/${id}/toggle`, { method: 'POST' });
-        fetchHabits();
-      } catch (e) {
-        console.error(e);
-      }
+      await fetch(`/api/habits/${id}/toggle`, { method: 'POST' });
+      fetchHabits();
+    }
+
+    async function deleteHabit(id) {
+      if (!confirm('حذف هذه العادة؟')) return;
+      await fetch(`/api/habits/${id}`, { method: 'DELETE' });
+      fetchHabits();
     }
 
     async function openRewardsModal() {
-      try {
-        const res = await fetch('/api/rewards');
-        const rewards = await res.json();
-        const list = document.getElementById('rewards-list');
-        list.innerHTML = '';
-
-        rewards.forEach(r => {
-          const canAfford = userPoints >= r.costPoints && !r.isClaimed;
-          const el = document.createElement('div');
-          el.className = 'p-3 rounded-2xl border border-slate-100 flex items-center justify-between bg-slate-50';
-          el.innerHTML = `
-            <div>
-              <h4 class="font-bold text-xs text-[#1E293B]">${r.title}</h4>
-              <span class="text-[10px] text-slate-400">${r.costPoints} نقطة</span>
-            </div>
-            ${
-              r.isClaimed
-                ? '<span class="text-xs text-slate-400 font-semibold">مستبدلة ✓</span>'
-                : `<button onclick="claimReward('${r.id}')" ${!canAfford ? 'disabled' : ''} class="px-3 py-1 text-xs font-semibold rounded-xl transition ${
-                    canAfford ? 'bg-[#4338CA] text-white hover:opacity-90' : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                  }">فتح</button>`
-            }
-          `;
-          list.appendChild(el);
-        });
-
-        document.getElementById('rewards-modal').classList.remove('hidden');
-      } catch (e) {
-        console.error(e);
-      }
+      const res = await fetch('/api/rewards');
+      const rewards = await res.json();
+      const list = document.getElementById('rewards-list');
+      list.innerHTML = '';
+      rewards.forEach(r => {
+        const canAfford = userPoints >= r.costPoints && !r.isClaimed;
+        const el = document.createElement('div');
+        el.className = 'p-3 rounded-2xl border border-slate-100 flex items-center justify-between bg-slate-50';
+        el.innerHTML = `
+          <div><h4 class="font-bold text-xs text-[#1E293B]">${r.title}</h4><span class="text-[10px] text-slate-400">${r.costPoints} نقطة</span></div>
+          ${r.isClaimed ? '<span class="text-xs text-slate-400 font-semibold">مستبدلة ✓</span>' : `<button onclick="claimReward('${r.id}')" ${!canAfford ? 'disabled' : ''} class="px-3 py-1 text-xs font-semibold rounded-xl transition ${canAfford ? 'bg-[#4338CA] text-white hover:opacity-90' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}">فتح</button>`}
+        `;
+        list.appendChild(el);
+      });
+      document.getElementById('rewards-modal').classList.remove('hidden');
     }
 
-    function closeRewardsModal() {
-      document.getElementById('rewards-modal').classList.add('hidden');
-    }
+    function closeRewardsModal() { document.getElementById('rewards-modal').classList.add('hidden'); }
 
     async function claimReward(id) {
-      try {
-        const res = await fetch(`/api/rewards/${id}/claim`, { method: 'POST' });
-        const data = await res.json();
-        alert(data.message || 'تم فتح المكافأة بنجاح!');
-        closeRewardsModal();
-        fetchHabits();
-      } catch (e) {
-        console.error(e);
-      }
+      await fetch(`/api/rewards/${id}/claim`, { method: 'POST' });
+      closeRewardsModal();
+      fetchHabits();
     }
 
     async function fetchMindMap() {
-      try {
-        const res = await fetch('/api/mindmap');
-        const data = await res.json();
-        const container = document.getElementById('mindmap-container');
-
-        const graphData = {
-          nodes: new vis.DataSet(data.nodes),
-          edges: new vis.DataSet(data.edges)
-        };
-
-        const options = {
-          physics: { stabilization: false, barnesHut: { springLength: 120 } },
-          nodes: { borderWidth: 1.5, shadow: true },
-          edges: { color: '#CBD5E1', smooth: true }
-        };
-
-        if (mindmapNetwork) mindmapNetwork.destroy();
-        mindmapNetwork = new vis.Network(container, graphData, options);
-      } catch (e) {
-        console.error('فشل تحميل خريطة الأفكار:', e);
-      }
+      const res = await fetch('/api/mindmap');
+      const data = await res.json();
+      const container = document.getElementById('mindmap-container');
+      const graphData = { nodes: new vis.DataSet(data.nodes), edges: new vis.DataSet(data.edges) };
+      if (mindmapNetwork) mindmapNetwork.destroy();
+      mindmapNetwork = new vis.Network(container, graphData, { physics: { stabilization: false } });
     }
 
     function openGoogleCalendarAuth() {
-      const authUrl = '/api/auth/google';
-      const width = 500;
-      const height = 650;
-      const left = window.screen.width / 2 - width / 2;
-      const top = window.screen.height / 2 - height / 2;
-
-      window.open(
-        authUrl,
-        'Google Auth',
-        `width=${width},height=${height},top=${top},left=${left}`
-      );
+      window.open('/api/auth/google', 'Google Auth', 'width=500,height=650');
     }
 
     let cachedAgents = [];
-
     async function fetchAgents() {
-      try {
-        const res = await fetch('/api/agents');
-        if (!res.ok) return;
-        cachedAgents = await res.json();
-        const container = document.getElementById('agents-list');
-        container.innerHTML = '';
-
-        cachedAgents.forEach(agent => {
-          const card = document.createElement('div');
-          card.className = "bg-white p-5 rounded-3xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col justify-between gap-4";
-
-          card.innerHTML = `
-            <div class="flex flex-col gap-2">
-              <div class="flex justify-between items-center">
-                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                  agent.role === 'FINANCIAL' ? 'bg-[#DCFCE7] text-[#15803D]' : 
-                  agent.role === 'CRYPTO' ? 'bg-[#FFEDD5] text-[#C2410C]' : 'bg-[#F3E8FF] text-[#7E22CE]'
-                }">${agent.role}</span>
-                <span class="w-2 h-2 rounded-full ${agent.isActive ? 'bg-emerald-500' : 'bg-slate-300'}"></span>
-              </div>
-              <h3 class="font-bold text-sm text-[#1E293B]">${agent.name}</h3>
-              <p class="text-xs text-[#64748B] leading-relaxed">${agent.description || ''}</p>
-            </div>
-
-            <div class="pt-3 border-t border-slate-50 flex justify-between items-center">
-              <span class="text-[11px] text-slate-400">${agent.canSearchWeb ? '🌐 بحث الويب مفعّل' : '🔒 بدون إنترنت'}</span>
-              <button onclick="openAgentModal('${agent.id}')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-[#1E293B] text-xs font-semibold rounded-xl transition">
-                تعديل الصلاحيات والبرومبت
-              </button>
-            </div>
-          `;
-          container.appendChild(card);
-        });
-      } catch (e) {
-        console.error(e);
-      }
+      const res = await fetch('/api/agents');
+      if (!res.ok) return;
+      cachedAgents = await res.json();
+      const container = document.getElementById('agents-list');
+      container.innerHTML = '';
+      cachedAgents.forEach(agent => {
+        const card = document.createElement('div');
+        card.className = "bg-white p-5 rounded-3xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col justify-between gap-4";
+        card.innerHTML = `
+          <div class="flex flex-col gap-2">
+            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold w-max bg-indigo-50 text-indigo-700">${agent.role}</span>
+            <h3 class="font-bold text-sm text-[#1E293B]">${agent.name}</h3>
+            <p class="text-xs text-[#64748B]">${agent.description || ''}</p>
+          </div>
+          <button onclick="openAgentModal('${agent.id}')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-[#1E293B] text-xs font-semibold rounded-xl transition">تعديل البرومبت والصلاحيات</button>
+        `;
+        container.appendChild(card);
+      });
     }
 
     function openAgentModal(id) {
       const agent = cachedAgents.find(a => a.id === id);
       if (!agent) return;
       document.getElementById('modal-agent-id').value = agent.id;
-      document.getElementById('modal-agent-name').textContent = `تعديل برومبت وصلاحيات: ${agent.name}`;
+      document.getElementById('modal-agent-name').textContent = `إعدادات: ${agent.name}`;
       document.getElementById('modal-agent-prompt').value = agent.systemPrompt || '';
       document.getElementById('modal-agent-key').value = agent.apiKey || '';
       document.getElementById('modal-agent-web').checked = agent.canSearchWeb;
       document.getElementById('agent-modal').classList.remove('hidden');
     }
-
-    function closeAgentModal() {
-      document.getElementById('agent-modal').classList.add('hidden');
-    }
+    function closeAgentModal() { document.getElementById('agent-modal').classList.add('hidden'); }
 
     async function saveAgentSettings() {
       const id = document.getElementById('modal-agent-id').value;
@@ -681,18 +699,14 @@
       const apiKey = document.getElementById('modal-agent-key').value.trim();
       const canSearchWeb = document.getElementById('modal-agent-web').checked;
 
-      try {
-        await fetch(`/api/agents/${id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ systemPrompt, apiKey, canSearchWeb })
-        });
-        closeAgentModal();
-        fetchAgents();
-        alert('تم حفظ إعدادات وبرومبت الوكيل بنجاح!');
-      } catch (e) {
-        console.error(e);
-      }
+      await fetch(`/api/agents/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ systemPrompt, apiKey, canSearchWeb })
+      });
+      closeAgentModal();
+      fetchAgents();
+      alert('تم حفظ إعدادات وبرومبت الوكيل بنجاح!');
     }
 
     async function deleteTask(id) {
@@ -702,7 +716,7 @@
     }
 
     async function logoutWhatsApp() {
-      if (!confirm('إنهاء جلسة واتساب وتوليد QR جديد؟')) return;
+      if (!confirm('إعادة تعيين الجلسة وتوليد رمز QR جديد؟')) return;
       await fetch('/api/whatsapp/logout', { method: 'POST' });
       checkWhatsAppStatus();
       openWhatsAppModal();
@@ -710,7 +724,7 @@
 
     checkWhatsAppStatus();
     fetchTasks();
-    setInterval(checkWhatsAppStatus, 10000);
+    setInterval(checkWhatsAppStatus, 15000);
     setInterval(fetchTasks, 30000);
   </script>
 </body>
