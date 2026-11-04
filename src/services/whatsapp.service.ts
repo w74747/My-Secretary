@@ -23,7 +23,6 @@ class WhatsAppService {
     } else {
       this.authDir = process.env.WHATSAPP_AUTH_DIR || path.join(process.cwd(), 'whatsapp_auth');
     }
-    console.log(`📁 مسار حفظ جلسة واتساب المعتمد: ${this.authDir}`);
   }
 
   public getStatus() {
@@ -37,6 +36,9 @@ class WhatsAppService {
   public async logout(): Promise<void> {
     try {
       if (this.sock) {
+        this.sock.ev.removeAllListeners('connection.update');
+        this.sock.ev.removeAllListeners('creds.update');
+        this.sock.ev.removeAllListeners('messages.upsert');
         await this.sock.logout();
         this.sock = null;
       }
@@ -48,40 +50,43 @@ class WhatsAppService {
       }
       this.isConnected = false;
       this.qrCodeDataUrl = null;
-      console.log('🧹 تم تصفير بيانات الجلسة بالكامل.');
-      setTimeout(() => {
-        this.init();
-      }, 2000);
+      setTimeout(() => { this.init(); }, 2000);
     }
-  }
-
-  public async disconnect(): Promise<void> {
-    return this.logout();
   }
 
   public async sendMessage(to: string, message: string): Promise<boolean> {
-    if (!this.sock || !this.isConnected) {
-      console.error('لا يمكن إرسال الرسالة، خدمة واتساب غير متصلة.');
-      return false;
-    }
-
+    if (!this.sock || !this.isConnected) return false;
     try {
       const cleanNumber = to.replace(/\D/g, '');
       const formattedJid = cleanNumber.includes('@') ? cleanNumber : `${cleanNumber}@s.whatsapp.net`;
       await this.sock.sendMessage(formattedJid, { text: message });
       return true;
     } catch (error) {
-      console.error(`خطأ أثناء إرسال الرسالة إلى [${to}]:`, error);
       return false;
     }
   }
 
   public async init(): Promise<void> {
+    const ownerPhoneRaw = process.env.OWNER_PHONE;
+    if (!ownerPhoneRaw) {
+      console.error('❌ خطأ حرج أمني: لم يتم تعيين متغير البيئة OWNER_PHONE في خدمة واتساب!');
+      return;
+    }
+    const ownerPhoneClean = ownerPhoneRaw.replace(/\D/g, '');
+    const ownerJid = `${ownerPhoneClean}@s.whatsapp.net`;
+
     if (!fs.existsSync(this.authDir)) {
       fs.mkdirSync(this.authDir, { recursive: true });
     }
 
     const { state, saveCreds } = await useMultiFileAuthState(this.authDir);
+
+    // تنظيف المستمعين القدامى لمنع تكرار معالجة الرسائل وتسريب الذاكرة عند إعادة الاتصال
+    if (this.sock) {
+      this.sock.ev.removeAllListeners('connection.update');
+      this.sock.ev.removeAllListeners('creds.update');
+      this.sock.ev.removeAllListeners('messages.upsert');
+    }
 
     this.sock = makeWASocket({
       auth: state,
@@ -97,32 +102,26 @@ class WhatsAppService {
 
       if (qr) {
         try {
-          // ضمان توليد صورة Data URL صحيحة لـ QR لتظهر في واجهة المستخدم فوراً
           this.qrCodeDataUrl = await qrcode.toDataURL(qr);
         } catch {
           this.qrCodeDataUrl = qr;
         }
         this.isConnected = false;
-        console.log('📌 تم توليد رمز QR جديد لواتساب.');
       }
 
       if (connection === 'close') {
         this.isConnected = false;
         const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
         const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-        console.log(`❌ انقطع اتصال واتساب (كود: ${statusCode}). إعادة المحاولة: ${shouldReconnect}`);
-
         if (shouldReconnect) {
-          setTimeout(() => {
-            this.init();
-          }, 3000);
+          setTimeout(() => { this.init(); }, 3000);
         } else {
           this.qrCodeDataUrl = null;
         }
       } else if (connection === 'open') {
         this.qrCodeDataUrl = null;
         this.isConnected = true;
-        console.log('✅ تم اتصال واتساب بالسيرفر بنجاح وحفظ الجلسة في القرص الثابت!');
+        console.log('✅ تم اتصال واتساب بسلام وأمان تام.');
       }
     });
 
@@ -131,40 +130,26 @@ class WhatsAppService {
 
       for (const msg of messages) {
         if (msg.key.fromMe) continue;
-
         const senderJid = msg.key.remoteJid;
 
-        if (
-          !senderJid ||
-          senderJid.endsWith('@newsletter') ||
-          senderJid === 'status@broadcast' ||
-          senderJid.endsWith('@broadcast') ||
-          senderJid.endsWith('@g.us')
-        ) {
+        if (!senderJid || senderJid.endsWith('@newsletter') || senderJid === 'status@broadcast' || senderJid.endsWith('@broadcast') || senderJid.endsWith('@g.us')) {
           continue;
         }
 
-        const rawText =
-          msg.message?.conversation ||
-          msg.message?.extendedTextMessage?.text ||
-          msg.message?.imageMessage?.caption ||
-          msg.message?.videoMessage?.caption;
-
+        const rawText = msg.message?.conversation || msg.message?.extendedTextMessage?.text || msg.message?.imageMessage?.caption;
         if (!rawText || rawText.trim() === '') continue;
 
         const cleanText = rawText.trim();
-        const senderDigits = senderJid.replace(/\D/g, '');
-        const ownerPhone = (process.env.OWNER_PHONE || '').replace(/\D/g, '');
+        const senderClean = senderJid.split('@')[0].replace(/\D/g, '');
+        
+        // 🔒 مطابقة دقيقة وتامة لرقم المالك (تمنع الثغرة تماماً)
+        const isOwner = senderClean === ownerPhoneClean || senderJid === ownerJid;
 
-        const senderLast8 = senderDigits.slice(-8);
-        const isOwner = ownerPhone ? senderDigits.includes(ownerPhone.slice(-8)) : false;
-
+        // البحث عن مهمة مسندة لهذا الرقم بدقة
         const assignedTask = await prisma.task.findFirst({
           where: {
             status: { not: 'DONE' },
-            assignee: {
-              phoneNumber: { contains: senderLast8 },
-            },
+            assignee: { phoneNumber: { equals: senderClean } },
           },
           include: { assignee: true },
           orderBy: { dueDate: 'asc' },
@@ -172,38 +157,26 @@ class WhatsAppService {
 
         if (assignedTask && !isOwner) {
           const isExplicitDone = /^(تم|تمت|خلصت|أنجزت|انجزت|سويتها|سويت المطلوب|جاهز)\b/i.test(cleanText);
-
           if (isExplicitDone) {
             await prisma.task.update({
               where: { id: assignedTask.id },
-              data: { status: 'DONE', progress: 100 },
+              data: { status: 'DONE', progress: 100 } as any,
             });
-
             await cancelTaskReminder(assignedTask.id);
-
-            await this.sock?.sendMessage(senderJid, {
-              text: 'يعطيك العافية، تم تسجيل إنجاز المهمة وإبلاغ المدير.',
-            }, { quoted: msg });
-
-            if (ownerPhone) {
-              await this.sendMessage(
-                ownerPhone,
-                `✅ تم إنجاز المهمة من قبل *${assignedTask.assignee?.name}*:\n📌 ${assignedTask.title}`
-              );
-            }
+            await this.sock?.sendMessage(senderJid, { text: 'يعطيك العافية، تم تسجيل إنجاز المهمة وإبلاغ المدير.' }, { quoted: msg });
+            await this.sendMessage(ownerPhoneClean, `✅ تم إنجاز المهمة من قبل *${assignedTask.assignee?.name}*:\n📌 ${assignedTask.title}`);
           }
           continue;
         }
 
-        if (ownerPhone && !isOwner) {
+        // 🔒 قفل أمني صارم: تجاهل تام لأي رسالة من شخص ليس المالك وليست مهمة مكلف بها
+        if (!isOwner) {
+          console.warn(`⚠️ محاولة وصول مرفوضة أو رسالة من جهة غير مصرح لها: ${senderJid}`);
           continue;
         }
 
         const hasTaskIntent = /^(مهمه|مهمة|ذكر|ذَكِّر|ذكرني|سجل|أضف|اضف|كلف|كلّف|بلغ|بلّغ|أخبر|اخبر|خبر|قل لـ?|قول لـ?|خلي|خلّي|وصي|وصّي|ارسل لـ?|أرسل لـ?|ايش عندي|شو عندي|جدولي|جدول المهام|المهام|تحديث المهمة)/i.test(cleanText);
-
-        if (!hasTaskIntent) {
-          continue;
-        }
+        if (!hasTaskIntent) continue;
 
         try {
           const replyText = await processUserMessage(senderJid, cleanText);
@@ -211,7 +184,7 @@ class WhatsAppService {
             await this.sock.sendMessage(senderJid, { text: replyText }, { quoted: msg });
           }
         } catch (err) {
-          console.error('خطأ أثناء معالجة رسالة المالك:', err);
+          console.error('خطأ في معالجة رسالة المالك عبر الذكاء الاصطناعي:', err);
         }
       }
     });
@@ -219,8 +192,3 @@ class WhatsAppService {
 }
 
 export const whatsappService = new WhatsAppService();
-
-export const initWhatsApp = () => whatsappService.init();
-export const getWhatsAppStatus = () => whatsappService.getStatus();
-export const disconnectWhatsApp = () => whatsappService.logout();
-export const sendMessage = (to: string, msg: string) => whatsappService.sendMessage(to, msg);
